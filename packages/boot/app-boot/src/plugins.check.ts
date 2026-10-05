@@ -1,6 +1,13 @@
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 
-import { PROFILE_TEMPLATES, entryOf, rowsOfBundles, repoRoot } from "./index.ts";
+import {
+  PROFILE_TEMPLATES,
+  entryOf,
+  repoRoot,
+  resolveBundleRows,
+  type BundlePluginRow,
+} from "./index.ts";
 
 interface Inject {
   capability: string;
@@ -15,16 +22,21 @@ interface Report {
   problems?: string[];
 }
 
-const seen = new Map<string, string>();
+const packageRoot = join(import.meta.dirname, "..");
+const seen = new Map<string, BundlePluginRow>();
+const warnings: string[] = [];
 for (const template of Object.values(PROFILE_TEMPLATES)) {
-  for (const row of await rowsOfBundles(template.bundles)) {
-    if (!seen.has(row.name)) seen.set(row.name, row.id);
+  const resolved = await resolveBundleRows(template.bundles, packageRoot, packageRoot);
+  warnings.push(...resolved.warnings);
+  for (const row of resolved.rows) {
+    if (!seen.has(row.name)) seen.set(row.name, row);
   }
 }
-const rows = [...seen].sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+for (const warning of warnings) console.log(`WARN ${warning}`);
+const rows = [...seen.values()].sort((left, right) => left.name.localeCompare(right.name));
 
-const checked = rows.map(([name, id]) => {
-  const run = spawnSync(process.execPath, [entryOf(name), "--check"], { encoding: "utf8", cwd: repoRoot });
+const checked = rows.map((row) => {
+  const run = spawnSync(process.execPath, [entryOf(row.name, row.root), "--check"], { encoding: "utf8", cwd: repoRoot });
   const line = (run.stdout ?? "").trim().split("\n").at(-1) ?? "";
   let report: Report = {};
   try {
@@ -32,7 +44,7 @@ const checked = rows.map(([name, id]) => {
   } catch {
   }
   const tail = (run.stderr ?? "").trim().split("\n").slice(-6).join("\n     ");
-  return { id, report, status: run.status, detail: (tail || line).slice(0, 400) };
+  return { id: row.id, report, status: run.status, detail: (tail || line).slice(0, 400) };
 });
 
 /// A plugin's own report cannot see the rest of the set, so the one thing none

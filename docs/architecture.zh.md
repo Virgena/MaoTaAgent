@@ -23,8 +23,8 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 | `packages/schedule` | 持久提醒与自动化，以及面向模型的 `cron_*` 管理工具。 | [README](../packages/schedule/README.zh.md) |
 | `packages/model` | 模型路由层：内部模型协议、目录与路由器、保留的 `api` 兼容适配器、OpenAI 与 Anthropic 边缘适配器，以及 scripted 测试适配器。 | `packages/model/*/src/index.ts` |
 | `packages/*` | 内核插件：api、model-*、pwsh-local、permission、tool-pwsh、tool-fs、tool-fs-search、tool-todo、tool-subagent、skill-filesystem、skill-bundled、skill、tool-skill、tools、session、system-prompt、hooks 与 agent。 | `packages/<组>/<包>/src/index.ts`，例如 `packages/agent/agent-core/src/index.ts` |
-| `packages/bundle/*` | 组合包：每个按包名列出某个 profile 挂载的插件行。 | [packages README](../packages/README.zh.md#bundles) |
-| `eggshell` 二进制 | 内核本身以及它的 stdio 协议。 | `eggshellmod` 仓库 |
+| `packages/bundle/*` | 组合包：每个按包名列出某个 profile 挂载的插件行，并把这些插件包声明成自己的依赖。 | [packages README](../packages/README.zh.md#bundles) |
+| `blmoadll` 二进制 | 内核本身以及它的 stdio 协议。 | `blmoadll` 仓库 |
 
 ## 启动链路
 
@@ -38,10 +38,10 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 
 ## 配置分层
 
-- 仓库根什么都不放：启动器读 `$MAOTA_HOME`，缺省 `~/.maota`。每个 profile 自带一个 `node_modules`，里面为每一行放一条指向仓库内那个包的链接。
+- 仓库根什么都不放：启动器读 `$MAOTA_HOME`，缺省 `~/.maota`。每个 profile 自带一个 `node_modules`，里面为每一行放一条链接，而那个包从持有该行的组合包自己的依赖树里解析。
 - 启动器一次只选一个 profile：serve 用 serve（base 加 web），其余命令用 default（只 base）。
-- $MAOTA_HOME/profiles/<name>/eggshell.toml 由该 profile 列出的组合包生成。每一行只写包名，内核从该 profile 自己的 `node_modules` 里解析它，所以只有行变了才会重写这个文件。它是插件集：有哪些插件、怎么起；各插件的默认值由插件自己持有。
-- `$MAOTA_HOME/profiles/<name>/eggshell.local.toml` 是机器自己的那层：网关、模型、钥匙。它 `extends` 生成的那份，并且赢过它。
+- $MAOTA_HOME/profiles/<name>/blmoadll.toml 由该 profile 列出的组合包生成。每一行只写包名，内核从该 profile 自己的 `node_modules` 里解析它，所以只有行变了才会重写这个文件。它是插件集：有哪些插件、怎么起；各插件的默认值由插件自己持有。
+- `$MAOTA_HOME/profiles/<name>/blmoadll.local.toml` 是机器自己的那层：网关、模型、钥匙。它 `extends` 生成的那份，并且赢过它。
 - `disabled = true` 的行照样解析、照样参与合并，但内核从不拉起它，能力表里也没有它。后面的层写 `false` 就启用，内核的 reloader 自己会发现，不用重启。
 - 后加载的层赢：表逐键合并，数组整体替换。
 - 拼错的 config 键会被 `pnpm run check:config` 点名，只报不拦。

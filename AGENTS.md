@@ -4,14 +4,15 @@ MaoTaAgent is a fully plugin-based proxy framework; please read [@docs/architect
 
 ## Repository layout
 
-- `apps/cli/`: the `maota` launcher (`@maota/cli`): entry modes, flags, terminal rendering. Its README owns the command contract.
+- `apps/cli/`: the `maota` launcher (`@virgena/maota`): entry modes, flags, terminal rendering. Its README owns the command contract.
 - `apps/web/`: the web plugin: one HTTP server for both the UI and the host RPC. The UI is `apps/web/ui/`; the component library `MaoTaUI` is an out-of-tree link package.
 - `packages/boot/app-boot/`, `packages/boot/host/`: launch glue: which config file and kernel binary one launch uses, and the Node host that drives the kernel over stdio.
 - `packages/`, `apps/`: pnpm workspace packages, each with a `package.json` and a `src/index.ts`. `pnpm build` (tsdown) writes `lib/index.js`, which is what the manifest points at and what a kernel spawns; `lib/` is not committed. A plugin is a package a profile's bundles list by name: the kernel resolves that name from the profile's own `node_modules` and spawns it, and never imports it. Two plugins sit one level deeper: `packages/agent/agent-core/` and `packages/boot/hmr/`.
-- `packages/bundle/`: the bundles. Each holds the plugin rows one profile mounts, listed by package name, and nothing else.
+- Bundle and DSH alignment rules: [.agents/skills/maota-dsh-bundle/SKILL.md](.agents/skills/maota-dsh-bundle/SKILL.md).
+- `packages/bundle/`: the bundles. Each holds the plugin rows one profile mounts, listed by package name, and declares those row packages as dependencies so the profile is installed from the bundle rather than the repository root.
 - `scripts/`: repository-level tooling. `scripts/check.ts` is the check runner `pnpm check` calls; `scripts/tests/` holds the smoke tests that need a real kernel binary.
 - `docs/`: architecture, conventions, defensive patterns, and the bilingual-pair checker.
-- `$MAOTA_HOME` (default `~/.maota`): one directory per profile under `profiles/`, each holding the generated `eggshell.toml` plugin set and the untracked `eggshell.local.toml` machine layer. Nothing lives in the repository root.
+- `$MAOTA_HOME` (default `~/.maota`): one directory per profile under `profiles/`, each holding the generated `blmoadll.toml` plugin set and the untracked `blmoadll.local.toml` machine layer. Nothing lives in the repository root.
 
 ## Commands
 
@@ -21,7 +22,7 @@ MaoTaAgent is a fully plugin-based proxy framework; please read [@docs/architect
 - `pnpm check:types`, `pnpm check:plugins`, `pnpm check:config`: the checks one at a time; `check:config` prints a config report without booting.
 - `pnpm boot`, `pnpm boot "question"`, `pnpm web`: launch the CLI: interactive or one-shot, then the resident web mode.
 - `pnpm cli:smoke`, `pnpm config:smoke`: CLI grammar and config resolution, no kernel needed.
-- `pnpm smoke`, `pnpm conversation`, `pnpm hmr:smoke`, `pnpm web:smoke`: smoke tests that need a built eggshell kernel.
+- `pnpm smoke`, `pnpm conversation`, `pnpm hmr:smoke`, `pnpm web:smoke`: smoke tests that need a built blmoadll kernel.
 - `pnpm i18n:write <x.md>`: re-record a bilingual pair after editing either side.
 
 ## Host sandbox failures

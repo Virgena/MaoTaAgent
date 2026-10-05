@@ -1,7 +1,6 @@
 {
   "name": "@maota/tool-skill",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,8 +12,15 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@maota/plugin-kit": "workspace:^",
-    "@maota/skill": "workspace:^"
+    "@maota/plugin-kit": "workspace:*",
+    "@maota/skill": "workspace:*"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib"
+  ]
 }

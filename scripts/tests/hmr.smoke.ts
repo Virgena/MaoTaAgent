@@ -3,14 +3,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { kernel as kernelBin } from "eggshell-kernel";
+import { kernel as kernelBin } from "@virgena/blmoadll";
 
 import { restartOnSourceChange } from "../../apps/cli/src/hmr.ts";
 import { boot, type Event } from "@maota/host";
 
-const [eggshellArg] = process.argv.slice(2);
-const eggshell = eggshellArg ?? kernelBin;
-if (!eggshell) throw new Error("usage: node scripts/tests/hmr.smoke.ts [eggshell]");
+const [blmoadllArg] = process.argv.slice(2);
+const blmoadll = blmoadllArg ?? kernelBin;
+if (!blmoadll) throw new Error("usage: node scripts/tests/hmr.smoke.ts [blmoadll]");
 
 const root = join(import.meta.dirname, "..", "..");
 const slashes = (path: string) => path.replaceAll("\\", "/");
@@ -62,7 +62,7 @@ writeFileSync(one, pluginSource("smoke.one", ["./local.ts", "../shared/kit.ts"])
 writeFileSync(two, pluginSource("smoke.two", ["../shared/kit.ts"]));
 writeFileSync(ignored, "export const ignored = 1;\n");
 
-const config = join(dir, "eggshell.toml");
+const config = join(dir, "blmoadll.toml");
 writeFileSync(
   config,
   [
@@ -83,7 +83,7 @@ writeFileSync(
   ].join("\n"),
 );
 
-const kernel = await boot(config, { bin: eggshell });
+const kernel = await boot(config, { bin: blmoadll });
 const started: Array<{ plugin?: string; pid?: number; trigger?: string }> = [];
 const changed: string[] = [];
 kernel.on(["kernel.plugin.started"], (event: Event) => started.push(event.payload as { plugin?: string }));

@@ -151,7 +151,7 @@ export const definition: Definition = {
     const project = join(root, "proj");
     const custom = join(root, "custom");
     const homeDir = join(root, "home");
-    const started = resolve(".");
+    const started = join(root, "empty-project");
     const before = process.env.MAOTA_HOME;
     const ctx = { channel: { log: (): void => {} } } as never;
     const write = (path: string, text: string): void => {
@@ -159,6 +159,7 @@ export const definition: Definition = {
       writeFileSync(path, text, { encoding: "utf8" });
     };
     try {
+      mkdirSync(join(started, ".git"), { recursive: true });
       mkdirSync(join(project, ".git"), { recursive: true });
       process.env.MAOTA_HOME = homeDir;
       await definition.setup?.({ config: { dirs: [custom] } } as unknown as Wiring);

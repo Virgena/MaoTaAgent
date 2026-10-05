@@ -1,7 +1,6 @@
 {
   "name": "@maota/web",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -17,23 +16,31 @@
     "check": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@maota/i18n-protocol": "workspace:^",
-    "@maota/plugin-kit": "workspace:^",
+    "@maota/i18n-protocol": "workspace:*",
+    "@maota/plugin-kit": "workspace:*",
     "dompurify": "^3",
-    "maotaui": "link:../../../MaoTaUI",
     "marked": "^16",
     "react": "^19",
     "react-dom": "^19"
   },
   "devDependencies": {
-    "@maota/host": "workspace:^",
+    "@maota/host": "workspace:*",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
-    "eggshell-kernel": "link:../../../eggshellmod/npm",
+    "@virgena/blmoadll": "^0.1.0",
     "typescript": "^7.0.2",
-    "vite": "^7"
+    "vite": "^7",
+    "maotaui": "link:../../../MaoTaUI"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib",
+    "dist"
+  ]
 }

@@ -21,7 +21,7 @@ kind: "package-group"
 <a id="packages"></a>
 ## 包
 
-每个 profile 各自生成 `$MAOTA_HOME/profiles/<name>/eggshell.toml`，一个被拉起的包一行：行里只说明要跑哪个包，内核从该 profile 自己的 `node_modules` 里解析它，能力由进程自己报。
+每个 profile 各自生成 `$MAOTA_HOME/profiles/<name>/blmoadll.toml`，一个被拉起的包一行：行里只说明要跑哪个包，内核从该 profile 自己的 `node_modules` 里解析它，能力由进程自己报。
 
 | 包 | 目录 | 能力 | 职责 |
 |---|---|---|---|
@@ -68,7 +68,7 @@ kind: "package-group"
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | `serve` profile 在 `default` 那份之上追加的那一行。 |
 
 <a id="bundles"></a>
-一个 profile 的行来自这两份清单：`base` 按那份顺序挂载它点名的三十个行，其中 `hmr` 是关着的；`web` 只加一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
+一个 profile 的行来自这两份清单，而且每个组合包都把自己行里的包声明成依赖：`base` 按那份顺序挂载自己持有的三十个行，其中 `hmr` 是关着的；`web` 只加自己持有的那一行，所以只有 `serve` profile 会挂载它。启动器为每个 profile 持有一份清单（`default` 列 `base`，`serve` 列 `base` 再列 `web`），从这些组合包里解析行，而某个 profile 实际用的那份住在 `$MAOTA_HOME/profiles/<name>/package.json` 里，所以加一个减一个都不必碰这个仓库。`web` 能力本身由 `apps/web` 提供，它不在这棵树里。
 
 `pnpm check:plugins` 会用 `--check` 跑每个被拉起的包的入口，在没有内核的情况下校验 `provides`、`injects`、`registrations`、`hostCalls`、`configKeys` 与 `selfCheck`。
 

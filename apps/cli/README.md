@@ -1,8 +1,8 @@
-# `@maota/cli`
+# `@virgena/maota`
 
 English | [中文](README.zh.md)
 
-`maota` is MaoTa's only Node launcher: it picks which config file and which kernel binary this run uses, boots the eggshell kernel as a child process, and drives it over the kernel's stdio protocol. [`src/args.ts`](src/args.ts) owns the command grammar and [`src/index.ts`](src/index.ts) owns the entry modes and the terminal rendering. Unknown options, an option without a value, extra arguments to `serve` or `check`, and a missing config file all exit nonzero.
+`maota` is MaoTa's only Node launcher: it picks which config file and which kernel binary this run uses, boots the blmoadll kernel as a child process, and drives it over the kernel's stdio protocol. [`src/args.ts`](src/args.ts) owns the command grammar and [`src/index.ts`](src/index.ts) owns the entry modes and the terminal rendering. Unknown options, an option without a value, extra arguments to `serve` or `check`, and a missing config file all exit nonzero.
 
 ## Table of Contents
 
@@ -26,6 +26,7 @@ English | [中文](README.zh.md)
 | `maota check` | Check only: run the kernel's own `--check` and pass its exit code through. |
 | `maota jobs list\|show\|kill` | Inspect or stop background jobs for the selected session. |
 | `maota cron list\|add\|update\|remove\|run\|pause\|resume` | Manage persistent schedules. `add` and `update` take a JSON object. |
+| `maota plugin add\|remove\|update\|why` | Install, remove, update, or inspect profile bundles through profile-local pnpm. |
 | `maota --help` | Print the usage text and exit 0. |
 | `maota --version` | Print `maota <version>` and exit 0. |
 
@@ -43,6 +44,10 @@ A subagent's work happens inside the turn that started it, so the CLI prints it 
 `maota cron list` lists schedules. `add` and `update` take a JSON object; the CLI injects the current session and cwd. `remove <id>` deletes, `run <id>` runs immediately, and `pause` or `resume` changes `enabled`.
 
 These commands call the `jobs` and `schedule` capabilities. They never write task files directly.
+
+## Plugin bundles
+
+`maota plugin --profile <name> add <spec>` installs a bundle into the profile with pnpm, adds it to the profile's `dependencies`, and enables it in `maota.profile.bundles` when it declares `maota.bundle.patch`. `remove` reverses both changes. `update` forwards to pnpm and reconciles bundle declarations. `why` forwards to pnpm unchanged. Relative path specs are anchored to the invoking directory. The `pnpm` executable must be on `PATH`.
 
 ## Options
 
@@ -72,9 +77,9 @@ These commands call the `jobs` and `schedule` capabilities. They never write tas
 
 Both inputs are picked by [`@maota/app-boot`](../../packages/boot/app-boot/README.md) before anything is spawned:
 
-- Config file: `--config`, then `EGGSHELL_CONFIG`, then `$MAOTA_HOME/profiles/<profile>/eggshell.local.toml` when it exists, then the generated `eggshell.toml` beside it; `MAOTA_HOME` defaults to `~/.maota`. A first run writes the profile manifest, generates that config from the bundles the profile lists, and links each row's package into the profile's own `node_modules`; `MaoTa: wrote <path>` goes to stderr. An explicit `--config` is never written to, and a missing one exits 2 before the kernel is spawned.
+- Config file: `--config`, then `BLMOADLL_CONFIG`, then `$MAOTA_HOME/profiles/<profile>/blmoadll.local.toml` when it exists, then the generated `blmoadll.toml` beside it; `MAOTA_HOME` defaults to `~/.maota`. A first run writes the profile manifest, generates that config from the bundles the profile lists, and links each row's package into the profile's own `node_modules`; `MaoTa: wrote <path>` goes to stderr. An explicit `--config` is never written to, and a missing one exits 2 before the kernel is spawned.
 - Profile: `--profile`, else `serve` for the `serve` command and `default` for every other one. A profile is a directory under `$MAOTA_HOME/profiles`; its `package.json` records the bundle list boot reads back, so the plugin set can be changed from the home directory alone.
-- Kernel binary: `--kernel`, then `EGGSHELL_BIN`, then the installed `eggshell-kernel` binary, then the neighbouring `eggshellmod` debug build.
+- Kernel binary: `--kernel`, then `BLMOADLL_BIN`, then the installed `@virgena/blmoadll` binary, then the neighbouring `blmoadll` debug build.
 
 Log lines on the kernel's stderr go to stderr: `serve` drops `info` lines and prefixes what it keeps with `MaoTa`, every other mode prefixes with `[kernel]`.
 
@@ -113,4 +118,4 @@ Run from source; there is no build step for this app:
 
 The first Ctrl-C asks the kernel to shut down with `ui_quit` and exits with the code the kernel returns; later Ctrl-C keystrokes are ignored while that shutdown is in flight. `check` deliberately bypasses `boot()` and uses the kernel's own checker with inherited stdio, so its diagnostics and exit code are the kernel's.
 
-Seven facts bound this launcher. Options never reach plugins, since every plugin setting lives in the profile's `eggshell.toml` or the `eggshell.local.toml` beside it, and `serve` has no options of its own because the web port comes from `[plugins.web.config]` alone. A `serve` whose web plugin never listens waits forever, because there is no startup deadline. Sessions are addressed by `--session` only. The import graph is read statically, so a module reached only through a computed specifier or a path alias is not in the graph and editing it restarts nothing. Hot reload restarts whole plugin processes, so nothing inside a plugin survives a restart. And all of it needs the `hmr` row enabled, while the generated one is disabled.
+Seven facts bound this launcher. Options never reach plugins, since every plugin setting lives in the profile's `blmoadll.toml` or the `blmoadll.local.toml` beside it, and `serve` has no options of its own because the web port comes from `[plugins.web.config]` alone. A `serve` whose web plugin never listens waits forever, because there is no startup deadline. Sessions are addressed by `--session` only. The import graph is read statically, so a module reached only through a computed specifier or a path alias is not in the graph and editing it restarts nothing. Hot reload restarts whole plugin processes, so nothing inside a plugin survives a restart. And all of it needs the `hmr` row enabled, while the generated one is disabled.

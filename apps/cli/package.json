@@ -1,7 +1,6 @@
 {
-  "name": "@maota/cli",
+  "name": "@virgena/maota",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,11 +12,21 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@maota/app-boot": "workspace:^",
-    "@maota/host": "workspace:^"
+    "@maota/app-boot": "workspace:*",
+    "@maota/base": "workspace:*",
+    "@maota/host": "workspace:*",
+    "@maota/web-bundle": "workspace:*",
+    "@maota/plugin-kit": "workspace:*"
   },
   "bin": {
     "maota": "./lib/index.js"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib"
+  ]
 }

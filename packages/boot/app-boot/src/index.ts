@@ -2,9 +2,11 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmdirSync
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { pathToFileURL } from "node:url";
 
-import { kernel as installedKernel } from "eggshell-kernel";
+import { PROTOCOL_VERSION } from "@maota/plugin-kit";
+import { kernel as installedKernel } from "@virgena/blmoadll";
+import { satisfies } from "semver";
+import { parse } from "smol-toml";
 
 export const repoRoot = join(import.meta.dirname, "..", "..", "..", "..");
 
@@ -13,6 +15,7 @@ export interface ConfigChoice {
   env?: NodeJS.ProcessEnv;
   profile?: string | undefined;
   home?: string | undefined;
+  root?: string | undefined;
 }
 
 export interface KernelChoice {
@@ -29,6 +32,29 @@ export interface PluginRow {
   config?: Record<string, unknown>;
 }
 
+export interface PluginPatchInsert {
+  insert: PluginRow[];
+}
+
+export interface PluginPatchUpdate {
+  id: string;
+  name?: string;
+  disabled?: boolean;
+  config?: Record<string, unknown>;
+}
+
+export type PluginPatch = PluginPatchInsert | PluginPatchUpdate;
+
+export interface BundlePluginRow extends PluginRow {
+  bundle: string;
+  root: string;
+}
+
+export interface BundleRows {
+  rows: BundlePluginRow[];
+  warnings: string[];
+}
+
 export interface ProfileTemplate {
   bundles: readonly string[];
 }
@@ -41,19 +67,35 @@ export const PROFILE_TEMPLATES: Record<string, ProfileTemplate> = {
 };
 
 const PROFILES = "profiles";
-const GENERATED = "eggshell.toml";
-const USER_LAYER = "eggshell.local.toml";
+const GENERATED = "blmoadll.toml";
+const USER_LAYER = "blmoadll.local.toml";
 
 interface BundleManifest {
-  maota?: { bundle?: { rows?: string } };
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  maota?: { bundle?: { patch?: string; protocol?: number } };
 }
 
 interface ProfileManifest {
   maota?: { profile?: { bundles?: string[] } };
 }
 
+interface LoadedBundle {
+  name: string;
+  root: string;
+  patches: PluginPatch[];
+}
+
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readJson(path: string): unknown {
+  return JSON.parse(readFileSync(path, "utf8")) as unknown;
 }
 
 export function maotaHome(env: NodeJS.ProcessEnv = process.env): string {
@@ -88,10 +130,27 @@ export function entryOf(name: string, root: string = repoRoot): string {
   }
 }
 
+function packageDirFromAnchor(anchor: string, name: string): string | undefined {
+  try {
+    return dirname(createRequire(anchor).resolve(`${name}/package.json`));
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveBundleDir(name: string, installAnchor: string, profileDirPath: string): string {
+  const anchors = [join(installAnchor, "package.json"), join(profileDirPath, "package.json")];
+  for (const anchor of anchors) {
+    const dir = packageDirFromAnchor(anchor, name);
+    if (dir !== undefined) return dir;
+  }
+  throw new Error(`maota: cannot resolve bundle ${name} from ${installAnchor} or ${profileDirPath}`);
+}
+
 export function bundlesOfProfile(dir: string, profile: string): readonly string[] {
   const manifest = join(dir, "package.json");
   if (existsSync(manifest)) {
-    const parsed = JSON.parse(readFileSync(manifest, "utf8")) as ProfileManifest;
+    const parsed = readJson(manifest) as ProfileManifest;
     const bundles = parsed.maota?.profile?.bundles;
     if (Array.isArray(bundles) && bundles.length > 0) return bundles;
   }
@@ -99,32 +158,184 @@ export function bundlesOfProfile(dir: string, profile: string): readonly string[
   return template === undefined ? [] : template.bundles;
 }
 
-async function rowsOfBundle(bundle: string, root: string): Promise<PluginRow[]> {
-  const dir = packageDir(bundle, root);
-  const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as BundleManifest;
-  const rows = manifest.maota?.bundle?.rows;
-  if (typeof rows !== "string" || rows === "") {
-    throw new Error(`maota: the bundle ${bundle} declares no maota.bundle.rows`);
+function readPluginRow(value: unknown, bundle: string, patch: string): PluginRow {
+  if (!isRecord(value)) throw new Error(`${bundle}: ${patch} row must be a table`);
+  if (typeof value.id !== "string" || value.id === "") throw new Error(`${bundle}: ${patch} row needs a non-empty id`);
+  if (typeof value.name !== "string" || value.name === "") throw new Error(`${bundle}: ${patch} row ${value.id} needs a non-empty name`);
+  if (value.disabled !== undefined && typeof value.disabled !== "boolean") {
+    throw new Error(`${bundle}: ${patch} row ${value.id} disabled must be boolean`);
   }
-  const loaded = (await import(pathToFileURL(join(dir, rows)).href)) as { rows?: PluginRow[] };
-  if (!Array.isArray(loaded.rows)) throw new Error(`maota: the bundle ${bundle} exports no rows array`);
-  return loaded.rows;
+  if (value.config !== undefined && !isRecord(value.config)) {
+    throw new Error(`${bundle}: ${patch} row ${value.id} config must be a table`);
+  }
+  return {
+    id: value.id,
+    name: value.name,
+    ...(value.disabled === undefined ? {} : { disabled: value.disabled }),
+    ...(value.config === undefined ? {} : { config: value.config }),
+  };
+}
+
+function readPluginPatch(value: unknown, bundle: string, path: string): PluginPatch {
+  if (!isRecord(value)) throw new Error(`${bundle}: ${path} patch entry must be a table`);
+  const keys = Object.keys(value);
+  if (value.insert !== undefined) {
+    if (keys.some((key) => key !== "insert")) throw new Error(`${bundle}: ${path} insert patch has extra keys`);
+    if (!Array.isArray(value.insert)) throw new Error(`${bundle}: ${path} insert must be an array`);
+    return { insert: value.insert.map((row) => readPluginRow(row, bundle, path)) };
+  }
+  if (typeof value.id !== "string" || value.id === "") throw new Error(`${bundle}: ${path} update patch needs a non-empty id`);
+  if (value.name !== undefined && (typeof value.name !== "string" || value.name === "")) {
+    throw new Error(`${bundle}: ${path} update patch ${value.id} name must be a non-empty string`);
+  }
+  if (value.disabled !== undefined && typeof value.disabled !== "boolean") {
+    throw new Error(`${bundle}: ${path} update patch ${value.id} disabled must be boolean`);
+  }
+  if (value.config !== undefined && !isRecord(value.config)) {
+    throw new Error(`${bundle}: ${path} update patch ${value.id} config must be a table`);
+  }
+  const allowed = new Set(["id", "name", "disabled", "config"]);
+  for (const key of keys) if (!allowed.has(key)) throw new Error(`${bundle}: ${path} update patch ${value.id} has unknown key ${key}`);
+  return {
+    id: value.id,
+    ...(value.name === undefined ? {} : { name: value.name }),
+    ...(value.disabled === undefined ? {} : { disabled: value.disabled }),
+    ...(value.config === undefined ? {} : { config: value.config }),
+  };
+}
+
+function readPatches(path: string, bundle: string): PluginPatch[] {
+  const parsed = parse(readFileSync(path, "utf8"));
+  if (!isRecord(parsed) || !Array.isArray(parsed.patch)) throw new Error(`${bundle}: ${path} must contain a [[patch]] array`);
+  return parsed.patch.map((item) => readPluginPatch(item, bundle, path));
+}
+
+function validateCompatibility(bundle: string, manifest: BundleManifest, root: string): void {
+  const declaration = manifest.maota?.bundle;
+  if (declaration?.protocol !== PROTOCOL_VERSION) {
+    throw new Error(`${bundle}: requires protocol ${String(declaration?.protocol ?? "missing")}, runtime provides ${PROTOCOL_VERSION}`);
+  }
+  const peer = manifest.peerDependencies?.["@maota/plugin-kit"];
+  if (peer === undefined || peer === "") throw new Error(`${bundle}: must declare a peer range for @maota/plugin-kit`);
+  const pluginKit = packageDir("@maota/plugin-kit", root);
+  const version = (readJson(join(pluginKit, "package.json")) as { version?: unknown }).version;
+  if (typeof version !== "string" || !satisfies(version, peer, { includePrerelease: true })) {
+    throw new Error(`${bundle}: requires @maota/plugin-kit ${peer}, runtime provides ${String(version ?? "unknown")}`);
+  }
+}
+
+function validateRowsOwned(bundle: string, manifest: BundleManifest, patches: readonly PluginPatch[]): void {
+  for (const patch of patches) {
+    if (!("insert" in patch)) continue;
+    for (const row of patch.insert) {
+      if (manifest.dependencies?.[row.name] === undefined) {
+        throw new Error(`${bundle}: row ${row.id} names ${row.name}, which is not a dependency`);
+      }
+    }
+  }
+}
+
+async function loadBundles(
+  bundles: readonly string[],
+  installAnchor: string,
+  profileDirPath: string,
+): Promise<{ layers: LoadedBundle[]; warnings: string[] }> {
+  const layers: LoadedBundle[] = [];
+  const warnings: string[] = [];
+  for (const bundle of bundles) {
+    try {
+      const root = resolveBundleDir(bundle, installAnchor, profileDirPath);
+      const manifest = readJson(join(root, "package.json")) as BundleManifest;
+      const path = manifest.maota?.bundle?.patch;
+      if (typeof path !== "string" || path === "") throw new Error(`${bundle}: package.json declares no maota.bundle.patch`);
+      validateCompatibility(bundle, manifest, installAnchor);
+      const patches = readPatches(join(root, path), bundle);
+      validateRowsOwned(bundle, manifest, patches);
+      layers.push({ name: bundle, root, patches });
+    } catch (error) {
+      warnings.push(`${bundle}: ${messageOf(error)}`);
+    }
+  }
+  return { layers, warnings };
+}
+
+export function applyPluginPatches(
+  rows: readonly BundlePluginRow[],
+  patches: readonly PluginPatch[],
+  bundle: string,
+  root: string,
+): BundleRows {
+  const result = [...rows];
+  const warnings: string[] = [];
+  const index = new Map<string, number>();
+  for (let i = 0; i < result.length; i += 1) index.set(result[i]!.id, i);
+
+  for (const patch of patches) {
+    if ("insert" in patch) {
+      for (const row of patch.insert) {
+        const owned = { ...row, bundle, root };
+        const existing = index.get(row.id);
+        if (existing === undefined) {
+          index.set(row.id, result.length);
+          result.push(owned);
+        } else {
+          result[existing] = owned;
+        }
+      }
+      continue;
+    }
+
+    const at = index.get(patch.id);
+    if (at === undefined) {
+      warnings.push(`${bundle}: patch target ${patch.id} does not exist`);
+      continue;
+    }
+    const target = result[at]!;
+    if (patch.name !== undefined && patch.name !== target.name) {
+      warnings.push(`${bundle}: patch ${patch.id} expects ${patch.name}, found ${target.name}`);
+      continue;
+    }
+    result[at] = {
+      ...target,
+      ...(patch.disabled === undefined ? {} : { disabled: patch.disabled }),
+      ...(patch.config === undefined ? {} : { config: patch.config }),
+    };
+  }
+  return { rows: result, warnings };
+}
+
+export async function resolveBundleRows(
+  bundles: readonly string[],
+  installAnchor: string = repoRoot,
+  profileDirPath: string = installAnchor,
+): Promise<BundleRows> {
+  const loaded = await loadBundles(bundles, installAnchor, profileDirPath);
+  let rows: BundlePluginRow[] = [];
+  const warnings = [...loaded.warnings];
+  for (const layer of loaded.layers) {
+    const applied = applyPluginPatches(rows, layer.patches, layer.name, layer.root);
+    rows = applied.rows;
+    warnings.push(...applied.warnings);
+  }
+  return { rows, warnings };
+}
+
+export async function resolvedRowsOfBundles(
+  bundles: readonly string[],
+  root: string = repoRoot,
+  profileDirPath: string = root,
+): Promise<BundlePluginRow[]> {
+  return (await resolveBundleRows(bundles, root, profileDirPath)).rows;
 }
 
 export async function rowsOfBundles(bundles: readonly string[], root: string = repoRoot): Promise<PluginRow[]> {
-  const rows: PluginRow[] = [];
-  const owner = new Map<string, string>();
-  for (const bundle of bundles) {
-    for (const row of await rowsOfBundle(bundle, root)) {
-      const earlier = owner.get(row.id);
-      if (earlier !== undefined) {
-        throw new Error(`maota: plugin id ${row.id} is listed twice: by ${earlier} and by ${bundle}`);
-      }
-      owner.set(row.id, bundle);
-      rows.push(row);
-    }
-  }
-  return rows;
+  const rows = await resolvedRowsOfBundles(bundles, root);
+  return rows.map(({ id, name, disabled, config }) => ({
+    id,
+    name,
+    ...(disabled === undefined ? {} : { disabled }),
+    ...(config === undefined ? {} : { config }),
+  }));
 }
 
 function tomlValue(value: unknown): string {
@@ -138,15 +349,9 @@ const HEADER: string[] = [
   "# MaoTa's plugin set for one profile: one provider per capability id.",
   "#",
   "# Generated from the bundles this profile lists (maota.profile.bundles in the package.json",
-  "# beside this file). A bundle names its rows by package, and every row names the package to",
-  "# run: the kernel resolves it out of the node_modules chain that starts here, so no row",
-  "# pins this machine's layout. Never edit this file: overrides belong in",
-  "# eggshell.local.toml beside it, which extends this one and whose later keys win.",
-  "#",
-  "# A row carries a config table only to override a plugin's own default; the rest come from",
-  "# the plugin itself. A misspelled key never takes effect quietly: each plugin's configKeys",
-  "# declares the keys it reads, and anything extra is named by check:config (reported, never",
-  "# blocked).",
+  "# beside this file). A bundle's patch names every row it inserts or updates, and every",
+  "# inserted package resolves from that bundle's own dependency tree. Never edit this file:",
+  "# overrides belong in blmoadll.local.toml beside it.",
   "",
 ];
 
@@ -165,13 +370,10 @@ export function renderConfig(rows: readonly PluginRow[]): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
-/// One package of one row, reachable by name from this profile: Node's own
-/// `node_modules` lookup starts at the config file's directory, so the profile
-/// owns a link per row and nothing in the config names a machine path.
-function linkPackage(dir: string, row: PluginRow, root: string): void {
+function linkPackage(dir: string, row: BundlePluginRow): void {
   let target: string;
   try {
-    target = packageDir(row.name, root);
+    target = packageDir(row.name, row.root);
   } catch (error) {
     throw new Error(`maota: the row ${row.id} names ${row.name}: ${messageOf(error)}`);
   }
@@ -194,7 +396,11 @@ function linkPackage(dir: string, row: PluginRow, root: string): void {
   symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
 }
 
-export async function ensureProfile(home: string, profile: string = DEFAULT_PROFILE, root: string = repoRoot): Promise<string> {
+export async function ensureProfile(
+  home: string,
+  profile: string = DEFAULT_PROFILE,
+  root: string = repoRoot,
+): Promise<string> {
   const dir = profileDir(home, profile);
   mkdirSync(dir, { recursive: true });
   const manifest = join(dir, "package.json");
@@ -203,15 +409,16 @@ export async function ensureProfile(home: string, profile: string = DEFAULT_PROF
     writeFileSync(
       manifest,
       JSON.stringify(
-        { name: `maota-profile-${profile}`, private: true, maota: { profile: { bundles: [...(template?.bundles ?? [])] } } },
+        { name: `maota-profile-${profile}`, private: true, dependencies: {}, maota: { profile: { bundles: [...(template?.bundles ?? [])] } } },
         undefined,
         2,
       ) + "\n",
     );
   }
-  const rows = await rowsOfBundles(bundlesOfProfile(dir, profile), root);
-  for (const row of rows) linkPackage(dir, row, root);
-  const rendered = renderConfig(rows);
+  const resolved = await resolveBundleRows(bundlesOfProfile(dir, profile), root, dir);
+  for (const warning of resolved.warnings) process.stderr.write(`MaoTa: skipped ${warning}\n`);
+  for (const row of resolved.rows) linkPackage(dir, row);
+  const rendered = renderConfig(resolved.rows);
   const target = join(dir, GENERATED);
   if (!existsSync(target) || readFileSync(target, "utf8") !== rendered) {
     writeFileSync(target, rendered);
@@ -222,11 +429,12 @@ export async function ensureProfile(home: string, profile: string = DEFAULT_PROF
 
 export async function resolveConfigPath(choice: ConfigChoice = {}): Promise<string> {
   const env = choice.env ?? process.env;
-  const explicit = choice.explicit ?? env.EGGSHELL_CONFIG;
+  const explicit = choice.explicit ?? env.BLMOADLL_CONFIG;
   if (explicit !== undefined && explicit !== "") return explicit;
   const profile = choice.profile ?? DEFAULT_PROFILE;
   const home = choice.home ?? maotaHome(env);
-  const dir = choice.home === undefined ? await ensureProfile(home, profile) : profileDir(home, profile);
+  const root = choice.root ?? repoRoot;
+  const dir = choice.home === undefined ? await ensureProfile(home, profile, root) : profileDir(home, profile);
   const user = join(dir, USER_LAYER);
   return existsSync(user) ? user : join(dir, GENERATED);
 }
@@ -237,8 +445,8 @@ export function resolveKernelBin(choice: KernelChoice = {}): string {
   const installed = choice.installed === undefined ? installedKernel : choice.installed;
   return (
     choice.explicit ??
-    env.EGGSHELL_BIN ??
+    env.BLMOADLL_BIN ??
     installed ??
-    join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe")
+    join(root, "..", "blmoadll", "target", "debug", "blmoadll.exe")
   );
 }

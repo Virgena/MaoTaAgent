@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 import { resolveConfigPath, resolveKernelBin } from "@maota/app-boot";
@@ -9,8 +10,10 @@ import { boot, type Chunk, type Event } from "@maota/host";
 import { parseArgs } from "./args.ts";
 import { runCronCommand } from "./cron.ts";
 import { runJobsCommand } from "./jobs.ts";
+import { runPluginCommand } from "./plugin.ts";
 import { restartOnSourceChange } from "./hmr.ts";
 
+const packageRoot = join(import.meta.dirname, "..");
 const VERSION =
   (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version?: string }).version ??
   "0.0.0";
@@ -24,15 +27,16 @@ usage:
   maota check         check the config only, start nothing (the exit code comes from the kernel)
   maota jobs ...      list, inspect, or stop background jobs
   maota cron ...      list, add, update, remove, run, pause, or resume schedules
+  maota plugin ...    add, remove, update, or inspect profile bundles
   maota --help        this text
   maota --version     print the version
 
 options:
   --profile <name>  which profile to boot: serve picks the web profile, every other command
                     picks default. A profile is a directory under $MAOTA_HOME/profiles holding
-                    the generated eggshell.toml and the eggshell.local.toml you edit beside it
-  --config <path>   config file, overriding the profile (default: EGGSHELL_CONFIG)
-  --kernel <bin>    kernel binary (default: EGGSHELL_BIN, then the installed eggshell-kernel,
+                    the generated blmoadll.toml and the blmoadll.local.toml you edit beside it
+  --config <path>   config file, overriding the profile (default: BLMOADLL_CONFIG)
+  --kernel <bin>    kernel binary (default: BLMOADLL_BIN, then the installed @virgena/blmoadll,
                     then the neighbouring debug build)
   --session <id>    session id (default: cli)
   --json            check only: ask the kernel for a JSON report
@@ -61,8 +65,19 @@ if (parsed.kind === "version") {
   process.exit(0);
 }
 
+if (parsed.kind === "plugin") {
+  const status = await runPluginCommand({
+    action: parsed.action,
+    args: parsed.args,
+    profile: parsed.profile,
+    cwd: process.cwd(),
+    installAnchor: packageRoot,
+  });
+  process.exit(status);
+}
+
 const profile = parsed.profile ?? (parsed.kind === "serve" ? "serve" : "default");
-const config = await resolveConfigPath({ explicit: parsed.config, profile }).catch((error: unknown) => {
+const config = await resolveConfigPath({ explicit: parsed.config, profile, root: packageRoot }).catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
   return process.exit(2);
 });

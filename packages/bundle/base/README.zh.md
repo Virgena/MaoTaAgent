@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-这个包只装一个数组，别无他物：profile 挂载的那份行清单。每一行点明一个包，可选地带上一个配置块；启动器把这份清单变成生成的 `eggshell.toml`，并在 profile 目录里为每个包建一条链接。行顺序不是契约的一部分：启动顺序来自每个插件声明的 `injects` 与 `registrations`。`hmr` 是唯一一个带着 disabled 出厂的。
+这个包装着 profile 挂载的行清单，并把每一行点名的包声明成自己的依赖。启动器读取这份清单，从本组合包自己的依赖树里解析每个包，再把清单变成生成的 `blmoadll.toml`，并在 profile 目录里为每个包建一条链接。行顺序不是契约的一部分：启动顺序来自每个插件声明的 `injects` 与 `registrations`。`hmr` 是唯一一个带着 disabled 出厂的。
 
 ## 目录
 
@@ -22,21 +22,21 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-```ts
-import { rows } from "@maota/base";
+```toml
+[[patch]]
+insert = [
+  { id = "tools", name = "@maota/tools" },
+]
 ```
 
-| 导出 | 形状 | 含义 |
+| 文件 | 形状 | 含义 |
 |---|---|---|
-| `rows` | `PluginRow[]` | 那些行，按挂载顺序。 |
-| `PluginRow` | `{ id, name, disabled?, config? }` | 一行。`id` 是配置块与日志行用的键，`name` 是要拉起的包。 |
+| `patch.toml` | `[[patch]]` 列表 | 按顺序执行 insert 与 update。`insert` 新增行；带 `id` 的表更新已有行；`config` 整体替换，`name` 出现时必须匹配。 |
 
 ### 这些行
 
 | id | 包 | 能力 |
 |---|---|---|
-| `api` | `@maota/api` | `api` |
-| `model-api` | `@maota/model-api` | `model.adapter.api` |
 | `model-openai` | `@maota/model-openai` | `model.adapter.openai` |
 | `model-anthropic` | `@maota/model-anthropic` | `model.adapter.anthropic` |
 | `model-router` | `@maota/model-router` | `model` |
@@ -81,16 +81,16 @@ import { rows } from "@maota/base";
 
 | 文件 | 职责 |
 |---|---|
-| [`src/rows.ts`](src/rows.ts) | `PluginRow` 与 `rows`。 |
+| [`patch.toml`](patch.toml) | `PluginRow` 与 `rows`。 |
 | [`src/index.ts`](src/index.ts) | 再导出。 |
 
 ### 一行怎么变成一个跑着的插件
 
-`app-boot` 从本包 `package.json` 里读 `maota.bundle.rows`，import 那个文件，然后走一遍数组。它会拒绝跨 bundle 重复的 `id`，把点名的每个包链接进 profile 目录好让内核解析得到，并由这份清单渲染出生成的 `eggshell.toml`。带 `config` 对象的行会渲染成那个插件的配置块，被禁用的行会写成 disabled。
+`app-boot` 从本包 `package.json` 里读 `maota.bundle.patch`，import 那个文件，然后走一遍数组。它会拒绝跨 bundle 重复的 `id`，从本组合包的 `dependencies` 里解析每个点名的包，把那个包链接进 profile 目录好让内核解析得到，并由这份清单渲染出生成的 `blmoadll.toml`。带 `config` 对象的行会渲染成那个插件的配置块，被禁用的行会写成 disabled。
 
 ### 用户在哪里覆盖
 
-生成的那个文件不是用户改的文件。profile 目录里还有 `eggshell.local.toml`，它 extends 生成的那份，而 `[plugins.tools.config]` 这样的配置块就该写在那里。由于一行只点一个包，别的不写，换 provider 意味着改行清单或改本地层，而不是改这个包。
+生成的那个文件不是用户改的文件。profile 目录里还有 `blmoadll.local.toml`，它 extends 生成的那份，而 `[plugins.tools.config]` 这样的配置块就该写在那里。由于一行只点一个包，别的不写，换 provider 意味着改行清单或改本地层，而不是改这个包。
 
 一个 bundle 就是一份列表，profile 要么整份挂载要么完全不挂载，所以删掉一行就意味着改这个数组。顺序靠人手维护：没有东西检查 provider 是否排在它的派发器之前，写错的后果是一个工具干脆不见了。配置块只在行自带配置时才写进生成文件，其余设置属于用户的本地层。被禁用的行仍然会被写出来，所以 `hmr` 在全新配置里是关闭的，打开它不需要别的改动。
 

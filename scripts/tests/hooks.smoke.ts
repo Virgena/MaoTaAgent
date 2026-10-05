@@ -3,16 +3,16 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { kernel as installedKernel } from "eggshell-kernel";
+import { kernel as installedKernel } from "@virgena/blmoadll";
 
 import { boot, type Chunk } from "@maota/host";
 
 const root = join(import.meta.dirname, "..", "..");
 const kernelBin =
   process.argv[2] ??
-  process.env.EGGSHELL_BIN ??
+  process.env.BLMOADLL_BIN ??
   installedKernel ??
-  join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
+  join(root, "..", "blmoadll", "target", "debug", "blmoadll.exe");
 
 function packageEntry(name: string): string {
   return join(root, "packages", name, "src", "index.ts");
@@ -33,7 +33,7 @@ const refusedFile = join(dir, "hook-denied.txt");
 mkdirSync(keeper, { recursive: true });
 writeFileSync(keptFile, "still here\n");
 
-const config = join(dir, "eggshell.toml");
+const config = join(dir, "blmoadll.toml");
 writeFileSync(
   config,
   [

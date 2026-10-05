@@ -426,7 +426,7 @@ export class Host {
       this.tail = "";
     }
     const report = [...this.stderrTail].reverse().find((line) => line.includes('"ok"'));
-    return new Error([`eggshell exited (code ${code})`, ...reportLines(report)].join("\n"));
+    return new Error([`blmoadll exited (code ${code})`, ...reportLines(report)].join("\n"));
   }
 }
 
@@ -448,7 +448,7 @@ function reportLines(report: string | undefined): string[] {
 }
 
 export async function boot(configPath: string, options: KernelOptions = {}): Promise<Host> {
-  const bin = options.bin ?? process.env.EGGSHELL_BIN ?? "eggshell";
+  const bin = options.bin ?? process.env.BLMOADLL_BIN ?? "blmoadll";
   const child = spawn(bin, [configPath], {
     cwd: options.cwd,
     env: options.env ?? process.env,

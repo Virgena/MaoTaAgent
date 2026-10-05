@@ -1,8 +1,8 @@
-# `@maota/cli`
+# `@virgena/maota`
 
 [English](README.md) | 中文
 
-`maota` 是 MaoTa 唯一的 Node 启动器：它定下这次运行读哪个配置文件、跑哪个内核二进制，把 eggshell 内核当子进程拉起来，并在内核的 stdio 协议上驱动它。[`src/args.ts`](src/args.ts) 负责命令语法，[`src/index.ts`](src/index.ts) 负责入口模式与终端渲染。未知选项、选项缺值、`serve` 或 `check` 多带参数、配置文件不存在，都以非零码退出。
+`maota` 是 MaoTa 唯一的 Node 启动器：它定下这次运行读哪个配置文件、跑哪个内核二进制，把 blmoadll 内核当子进程拉起来，并在内核的 stdio 协议上驱动它。[`src/args.ts`](src/args.ts) 负责命令语法，[`src/index.ts`](src/index.ts) 负责入口模式与终端渲染。未知选项、选项缺值、`serve` 或 `check` 多带参数、配置文件不存在，都以非零码退出。
 
 ## 目录
 
@@ -26,6 +26,7 @@
 | `maota check` | 只检查：跑内核自己的 `--check`，把它的退出码透传出去。 |
 | `maota jobs list\|show\|kill` | 查看或停止当前会话的后台任务。 |
 | `maota cron list\|add\|update\|remove\|run\|pause\|resume` | 管理持久计划。`add` 与 `update` 接收 JSON 对象。 |
+| `maota plugin add\|remove\|update\|why` | 通过 profile 内的 pnpm 安装、移除、更新或检查组合包。 |
 | `maota --help` | 打印用法并退出 0。 |
 | `maota --version` | 打印 `maota <版本>` 并退出 0。 |
 
@@ -43,6 +44,10 @@
 `maota cron list` 列出计划。`add` 与 `update` 接收 JSON 对象；CLI 会注入当前 session 与 cwd。`remove <id>` 删除，`run <id>` 立即运行，`pause` 与 `resume` 切换 enabled。
 
 这些命令只调用 `jobs` 与 `schedule` capability，不直接读写任务文件。
+
+## 插件组合包
+
+`maota plugin --profile <name> add <spec>` 用 profile 内的 pnpm 安装组合包，写入 profile 的 `dependencies`；如果包声明了 `maota.bundle.patch`，还会加入 `maota.profile.bundles`。`remove` 会同时撤销这两项。`update` 转发给 pnpm 并重新同步组合包声明。`why` 原样转发。相对路径以调用目录为锚点，`pnpm` 必须在 `PATH` 上。
 
 ## 选项
 
@@ -72,9 +77,9 @@
 
 两个输入都在重启任何东西之前由 [`@maota/app-boot`](../../packages/boot/app-boot/README.zh.md) 定下：
 
-- 配置文件：`--config`，其次 `EGGSHELL_CONFIG`，其次存在的 `$MAOTA_HOME/profiles/<profile>/eggshell.local.toml`，否则是同目录里生成的那份 `eggshell.toml`；`MAOTA_HOME` 缺省 `~/.maota`。首次运行会写下 profile 清单，按该 profile 列出的组合包生成配置，并为每一行在 profile 自己的 `node_modules` 里建一条指向该包的链接，同时往 stderr 打一行 `MaoTa: wrote <path>`。显式给的 `--config` 从不写入；文件不在，内核还没起来就以 2 退出。
+- 配置文件：`--config`，其次 `BLMOADLL_CONFIG`，其次存在的 `$MAOTA_HOME/profiles/<profile>/blmoadll.local.toml`，否则是同目录里生成的那份 `blmoadll.toml`；`MAOTA_HOME` 缺省 `~/.maota`。首次运行会写下 profile 清单，按该 profile 列出的组合包生成配置，并为每一行在 profile 自己的 `node_modules` 里建一条指向该包的链接，同时往 stderr 打一行 `MaoTa: wrote <path>`。显式给的 `--config` 从不写入；文件不在，内核还没起来就以 2 退出。
 - Profile：`--profile`，其次 `serve` 子命令用 `serve`，其余命令用 `default`。profile 是 `$MAOTA_HOME/profiles` 下的一个目录；它的 `package.json` 记着启动时读回的组合包列表，所以光在 home 目录里就能改插件集。
-- 内核二进制：`--kernel`，其次 `EGGSHELL_BIN`，其次安装好的 `eggshell-kernel` 二进制，最后隔壁 `eggshellmod` 的 debug 产物。
+- 内核二进制：`--kernel`，其次 `BLMOADLL_BIN`，其次安装好的 `@virgena/blmoadll` 二进制，最后隔壁 `blmoadll` 的 debug 产物。
 
 内核 stderr 上的日志行也走 stderr：`serve` 丢掉 `info` 行、留下的前缀是 `MaoTa`，其它模式前缀是 `[kernel]`。
 
@@ -113,4 +118,4 @@ roots = ["<repo>/apps", "<repo>/packages"]
 
 第一次 Ctrl-C 让内核以 `ui_quit` 停机，并以内核返回的码退出；停机在路上时后续的 Ctrl-C 不再重复。`check` 故意绕开 `boot()`，用内核自己的检查器并继承 stdio，因此诊断与退出码都属于内核。
 
-七条事实界定了这个启动器。选项从不抵达插件，因为每一项插件设置都在 profile 的 `eggshell.toml` 或它旁边的 `eggshell.local.toml` 里，而 `serve` 自己没有选项，web 端口只来自 `[plugins.web.config]`。web 插件始终不监听的 `serve` 会一直等下去，因为没有启动期限。会话只能用 `--session` 指认。导入图是静态读出来的，所以只能通过计算出来的 specifier 或路径别名到达的模块不在图里，改它不会重启任何东西。热重载重启整个插件进程，所以插件内部没有任何东西能活过一次重启。这一切都要求 `hmr` 行是打开的，而生成的那一行是关闭的。
+七条事实界定了这个启动器。选项从不抵达插件，因为每一项插件设置都在 profile 的 `blmoadll.toml` 或它旁边的 `blmoadll.local.toml` 里，而 `serve` 自己没有选项，web 端口只来自 `[plugins.web.config]`。web 插件始终不监听的 `serve` 会一直等下去，因为没有启动期限。会话只能用 `--session` 指认。导入图是静态读出来的，所以只能通过计算出来的 specifier 或路径别名到达的模块不在图里，改它不会重启任何东西。热重载重启整个插件进程，所以插件内部没有任何东西能活过一次重启。这一切都要求 `hmr` 行是打开的，而生成的那一行是关闭的。

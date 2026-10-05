@@ -6,19 +6,22 @@ import { dirname, join } from "node:path";
 import {
   DEFAULT_PROFILE,
   PROFILE_TEMPLATES,
+  applyPluginPatches,
   bundlesOfProfile,
   ensureProfile,
   entryOf,
   maotaHome,
+  packageDir,
   profileDir,
   renderConfig,
   repoRoot,
-  packageDir,
+  resolveBundleDir,
+  resolveBundleRows,
   resolveConfigPath,
   resolveKernelBin,
-  rowsOfBundles,
 } from "../src/index.ts";
 
+const appBootRoot = join(import.meta.dirname, "..");
 const dir = mkdtempSync(join(tmpdir(), "maota-config-"));
 const home = join(dir, "home");
 const env = { MAOTA_HOME: home } as NodeJS.ProcessEnv;
@@ -28,25 +31,25 @@ assert.ok(maotaHome({} as NodeJS.ProcessEnv).endsWith(".maota"));
 assert.equal(profileDir(home, DEFAULT_PROFILE), join(home, "profiles", "default"));
 assert.throws(() => profileDir(home, "nope"), /unknown profile/, "an unknown profile is refused by name");
 
-const base = await rowsOfBundles(PROFILE_TEMPLATES["default"]!.bundles);
-assert.deepEqual(
-  base.map((row) => row.id),
-  [...new Set(base.map((row) => row.id))],
-  "the base bundle names no plugin twice",
-);
-assert.equal(base.find((row) => row.id === "hmr")?.disabled, true, "the development watcher ships off");
-assert.ok(!base.some((row) => row.id === "web"), "the web plugin belongs to the serve profile, not to the default one");
+const base = await resolveBundleRows(PROFILE_TEMPLATES["default"]!.bundles, appBootRoot, appBootRoot);
+assert.deepEqual(base.warnings, [], "the shipped base bundle loads cleanly");
+assert.equal(base.rows.length, 30);
+assert.equal(base.rows.find((row) => row.id === "hmr")?.disabled, true, "the development watcher ships off");
+for (const row of base.rows) {
+  const manifest = JSON.parse(readFileSync(join(packageDir(row.bundle, appBootRoot), "package.json"), "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+  assert.equal(manifest.dependencies?.[row.name], "workspace:*", `${row.name} should be owned by ${row.bundle}`);
+}
 
-const serve = await rowsOfBundles(PROFILE_TEMPLATES["serve"]!.bundles);
-assert.equal(serve.length, base.length + 1);
-assert.equal(serve.at(-1)?.name, "@maota/web");
+const serve = await resolveBundleRows(PROFILE_TEMPLATES["serve"]!.bundles, appBootRoot, appBootRoot);
+assert.deepEqual(serve.warnings, [], "the shipped serve bundle loads cleanly");
+assert.equal(serve.rows.length, base.rows.length + 1);
+assert.equal(serve.rows.at(-1)?.name, "@maota/web");
 
-const generated = await ensureProfile(home, "default");
+const generated = await ensureProfile(home, "default", appBootRoot);
 assert.equal(generated, join(home, "profiles", "default"));
-const config = join(generated, "eggshell.toml");
-assert.ok(existsSync(join(generated, "package.json")), "a first run writes the profile manifest");
-assert.ok(existsSync(config), "a first run writes the generated config");
-
+const config = join(generated, "blmoadll.toml");
 const manifest = JSON.parse(readFileSync(join(generated, "package.json"), "utf8")) as {
   maota?: { profile?: { bundles?: string[] } };
 };
@@ -54,94 +57,131 @@ assert.deepEqual(manifest.maota?.profile?.bundles, ["@maota/base"], "the manifes
 assert.deepEqual(bundlesOfProfile(generated, "default"), ["@maota/base"], "the manifest is what boot reads back");
 
 const body = readFileSync(config, "utf8");
-for (const id of base.map((row) => row.id)) assert.ok(body.includes(`[plugins.${id}]`), `${id} should be configured`);
-assert.ok(!body.includes("{{"), "a generated config carries resolved paths, not placeholders");
-assert.ok(!body.includes("[plugins.web]"), "the default profile does not start the web plugin");
-
-const names = [...body.matchAll(/^name = "([^"]+)"$/gm)].map((match) => match[1] ?? "");
-assert.deepEqual(
-  names,
-  base.map((row) => row.name),
-  "every row names its package, in the bundle's own order",
-);
-for (const name of names) {
-  const link = join(generated, "node_modules", ...name.split("/"));
-  assert.ok(existsSync(join(link, "package.json")), `the profile does not link ${name}`);
-  assert.equal(realpathSync(link), realpathSync(packageDir(name)), `${name} should point at the repository copy`);
+for (const row of base.rows) assert.ok(body.includes(`[plugins.${row.id}]`), `${row.id} should be configured`);
+for (const row of base.rows) {
+  const link = join(generated, "node_modules", ...row.name.split("/"));
+  assert.ok(existsSync(join(link, "package.json")), `the profile does not link ${row.name}`);
+  assert.equal(realpathSync(link), realpathSync(packageDir(row.name, row.root)), `${row.name} should come from ${row.bundle}`);
 }
 
 const rewritten = readFileSync(config, "utf8");
-await ensureProfile(home, "default");
+await ensureProfile(home, "default", appBootRoot);
 assert.equal(readFileSync(config, "utf8"), rewritten, "a second boot rewrites nothing");
+await ensureProfile(home, "serve", appBootRoot);
+assert.ok(readFileSync(join(home, "profiles", "serve", "blmoadll.toml"), "utf8").includes("[plugins.web]"));
 
-await ensureProfile(home, "serve");
-assert.ok(
-  readFileSync(join(home, "profiles", "serve", "eggshell.toml"), "utf8").includes("[plugins.web]"),
-  "the serve profile starts the web plugin",
-);
-
-writeFileSync(join(generated, "eggshell.local.toml"), "[plugins.api]\n");
+writeFileSync(join(generated, "blmoadll.local.toml"), "[plugins.tools]\n");
 assert.equal(
-  await resolveConfigPath({ env, home }),
-  join(generated, "eggshell.local.toml"),
+  await resolveConfigPath({ env, home, root: appBootRoot }),
+  join(generated, "blmoadll.local.toml"),
   "the user layer wins when it exists",
 );
 assert.equal(await resolveConfigPath({ env, home, explicit: join(dir, "given.toml") }), join(dir, "given.toml"));
-assert.equal(await resolveConfigPath({ env, home, profile: "serve" }), join(home, "profiles", "serve", "eggshell.toml"));
+
+const insert = { insert: [{ id: "tools", name: "@maota/tools" }] };
+const configured = applyPluginPatches([], [insert], "base", "C:\\base");
+assert.deepEqual(configured.warnings, []);
+assert.deepEqual(configured.rows, [{ id: "tools", name: "@maota/tools", bundle: "base", root: "C:\\base" }]);
+const updated = applyPluginPatches(configured.rows, [{ id: "tools", config: { mode: "strict" }, disabled: false }], "extra", "C:\\extra");
+assert.deepEqual(updated.warnings, []);
+assert.deepEqual(updated.rows, [
+  { id: "tools", name: "@maota/tools", config: { mode: "strict" }, disabled: false, bundle: "base", root: "C:\\base" },
+]);
+assert.match(applyPluginPatches(configured.rows, [{ id: "missing", disabled: true }], "extra", "C:\\extra").warnings[0] ?? "", /does not exist/);
+assert.match(applyPluginPatches(configured.rows, [{ id: "tools", name: "@maota/other" }], "extra", "C:\\extra").warnings[0] ?? "", /expects/);
+const duplicate = applyPluginPatches(configured.rows, [{ insert: [{ id: "tools", name: "@maota/other" }] }], "extra", "C:\\extra");
+assert.equal(duplicate.rows[0]?.name, "@maota/other", "a duplicate insert replaces the earlier row");
+assert.equal(duplicate.rows[0]?.bundle, "extra");
 
 const scratch = mkdtempSync(join(tmpdir(), "maota-bundles-"));
-function bundle(name: string, manifest: Record<string, unknown>, rows?: string): void {
-  const pkg = join(scratch, "packages", name.replace("/", "-"));
-  mkdirSync(join(pkg, "src"), { recursive: true });
-  writeFileSync(
-    join(pkg, "package.json"),
-    JSON.stringify({
-      name,
-      private: true,
-      type: "module",
-      exports: { ".": "./src/index.ts", "./package.json": "./package.json" },
-      ...manifest,
-    }),
-  );
-  if (rows !== undefined) writeFileSync(join(pkg, "src", "rows.ts"), rows);
-  const link = join(scratch, "node_modules", ...name.split("/"));
-  mkdirSync(dirname(link), { recursive: true });
-  symlinkSync(pkg, link, "junction");
+function writeJson(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(value, undefined, 2) + "\n");
 }
-writeFileSync(join(scratch, "package.json"), JSON.stringify({ name: "scratch", private: true, type: "module" }));
-bundle("@scratch/good", { maota: { bundle: { rows: "./src/rows.ts" } } }, 'export const rows = [{ id: "one", name: "@scratch/good" }];\n');
-bundle("@scratch/silent", {});
-bundle("@scratch/nameless", { maota: { bundle: { rows: "./src/rows.ts" } } }, 'export const rows = [{ id: "one", name: "@scratch/nameless" }];\n');
-bundle(
-  "@scratch/broken",
-  { maota: { bundle: { rows: "./src/rows.ts" } } },
-  'export const rows = [{ id: "ghost", name: "@scratch/ghost" }];\n',
-);
+function linkPackage(root: string, name: string, target: string): void {
+  const link = join(root, "node_modules", ...name.split("/"));
+  mkdirSync(dirname(link), { recursive: true });
+  symlinkSync(target, link, "junction");
+}
+function bundleFixture(
+  root: string,
+  name: string,
+  patch: string,
+  dependencies: Record<string, string> = {},
+  peer = "^0.1.0",
+  protocol = 3,
+): string {
+  const packageRoot = join(root, "bundles", name.replace("/", "-"));
+  writeJson(join(packageRoot, "package.json"), {
+    name,
+    version: "0.1.0",
+    type: "module",
+    maota: { bundle: { patch: "./patch.toml", protocol } },
+    dependencies,
+    peerDependencies: { "@maota/plugin-kit": peer },
+  });
+  writeFileSync(join(packageRoot, "patch.toml"), patch);
+  linkPackage(root, name, packageRoot);
+  return packageRoot;
+}
+function pluginFixture(root: string, name: string): string {
+  const packageRoot = join(root, "plugins", name.replace("/", "-"));
+  writeJson(join(packageRoot, "package.json"), {
+    name,
+    version: "0.1.0",
+    type: "module",
+    main: "index.js",
+    exports: { ".": "./index.js", "./package.json": "./package.json" },
+  });
+  writeFileSync(join(packageRoot, "index.js"), "export {};\n");
+  return packageRoot;
+}
 
-assert.deepEqual(
-  (await rowsOfBundles(["@scratch/good"], scratch)).map((row) => row.id),
-  ["one"],
-  "a bundle's rows are read through its own maota.bundle.rows",
-);
-await assert.rejects(() => rowsOfBundles(["@scratch/silent"], scratch), /declares no maota\.bundle\.rows/);
-await assert.rejects(() => rowsOfBundles(["@scratch/good", "@scratch/nameless"], scratch), /listed twice/);
-await assert.rejects(() => rowsOfBundles(["@scratch/missing"], scratch), /cannot find @scratch\/missing/);
-assert.throws(() => entryOf("@scratch/missing", scratch), /cannot resolve the entry of @scratch\/missing/);
+writeJson(join(scratch, "package.json"), { name: "scratch", private: true, type: "module" });
+const kit = join(scratch, "plugins", "plugin-kit");
+writeJson(join(kit, "package.json"), { name: "@maota/plugin-kit", version: "0.1.0", type: "module" });
+linkPackage(scratch, "@maota/plugin-kit", kit);
 
-const orphanHome = mkdtempSync(join(tmpdir(), "maota-orphan-"));
-const orphan = join(orphanHome, "profiles", "default");
-mkdirSync(orphan, { recursive: true });
-writeFileSync(
-  join(orphan, "package.json"),
-  JSON.stringify({ name: "maota-profile-default", private: true, maota: { profile: { bundles: ["@scratch/broken"] } } }),
+const ownedName = "@scratch/owned-plugin";
+const ownedBundle = bundleFixture(
+  scratch,
+  "@scratch/owned",
+  `[[patch]]\ninsert = [{ id = "owned", name = "${ownedName}" }]\n`,
+  { [ownedName]: "workspace:*" },
 );
-await assert.rejects(
-  () => ensureProfile(orphanHome, "default", scratch),
-  /the row ghost names @scratch\/ghost/, 
-  "a row whose package does not resolve stops the boot with its id and package",
-);
+const ownedPlugin = pluginFixture(scratch, ownedName);
+linkPackage(ownedBundle, ownedName, ownedPlugin);
+assert.equal(existsSync(join(scratch, "node_modules", ...ownedName.split("/"))), false, "the row package is not at the install root");
 
+const ownedHome = mkdtempSync(join(tmpdir(), "maota-owned-"));
+const ownedProfile = join(ownedHome, "profiles", "default");
+mkdirSync(ownedProfile, { recursive: true });
+writeJson(join(ownedProfile, "package.json"), {
+  name: "maota-profile-default",
+  private: true,
+  maota: { profile: { bundles: ["@scratch/owned"] } },
+});
+await ensureProfile(ownedHome, "default", scratch);
+assert.ok(readFileSync(join(ownedProfile, "blmoadll.toml"), "utf8").includes("[plugins.owned]"));
+assert.equal(realpathSync(join(ownedProfile, "node_modules", ...ownedName.split("/"))), realpathSync(ownedPlugin));
+
+const broken = bundleFixture(scratch, "@scratch/broken", "not = [valid\n");
+const skipped = await resolveBundleRows(["@scratch/broken"], scratch, scratch);
+assert.equal(skipped.rows.length, 0);
+assert.match(skipped.warnings[0] ?? "", /@scratch\/broken/);
+assert.ok(existsSync(join(broken, "patch.toml")));
+
+bundleFixture(scratch, "@scratch/incompatible", `[[patch]]\ninsert = [{ id = "x", name = "${ownedName}" }]\n`, { [ownedName]: "workspace:*" }, "^9.0.0");
+const incompatibleResult = await resolveBundleRows(["@scratch/incompatible"], scratch, scratch);
+assert.equal(incompatibleResult.rows.length, 0);
+assert.match(incompatibleResult.warnings[0] ?? "", /plugin-kit/);
+
+const profileBundle = join(scratch, "profiles", "default", "node_modules", "@scratch", "owned");
+mkdirSync(dirname(profileBundle), { recursive: true });
+symlinkSync(ownedBundle, profileBundle, "junction");
+assert.equal(resolveBundleDir("@scratch/owned", scratch, join(scratch, "profiles", "default")), realpathSync(ownedBundle));
+assert.throws(() => entryOf("@scratch/missing", scratch), /cannot resolve the entry/);
 assert.equal(renderConfig([]).includes("[plugins."), false, "an empty bundle list renders no rows");
 assert.ok(resolveKernelBin({ installed: null, root: repoRoot, env: {} as NodeJS.ProcessEnv }).length > 0);
 
-console.log("config ok: profiles, bundle rows, generated config, the user layer on top");
+console.log("config ok: patch layers, bundle ownership, profile links, compatibility and user layer");

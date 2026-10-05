@@ -20,6 +20,8 @@ const cases: Array<[string[], unknown]> = [
   [["check", "--json"], { kind: "check", json: true, config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
   [["--config", "a.toml", "--kernel", "k.exe", "check"], { kind: "check", json: false, config: "a.toml", kernel: "k.exe", profile: undefined, session: "cli" }],
   [["--profile", "serve", "serve"], { kind: "serve", config: undefined, kernel: undefined, profile: "serve", session: "cli" }],
+  [["plugin", "add", "pkg"], { kind: "plugin", action: "add", args: ["pkg"], config: undefined, kernel: undefined, profile: undefined, session: "cli" }],
+  [["plugin", "--profile", "work", "why", "pkg"], { kind: "plugin", action: "why", args: ["pkg"], config: undefined, kernel: undefined, profile: "work", session: "cli" }],
   [["--help"], { kind: "help" }],
   [["-h"], { kind: "help" }],
   [["--version"], { kind: "version" }],
@@ -44,6 +46,7 @@ function run(args: string[]): { status: number | null; stdout: string; stderr: s
 const help = run(["--help"]);
 assert.equal(help.status, 0, help.stderr);
 assert.ok(help.stdout.includes("maota check"), "the help text should list the check subcommand");
+assert.ok(help.stdout.includes("maota plugin"), "the help text should list the plugin subcommand");
 assert.ok(help.stdout.includes("exit codes:"), "the help text should list the exit codes");
 
 const version = run(["--version"]);

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-A profile does not name plugins one by one. It names bundles, and a bundle is a package that exports a list of rows. Two bundles exist: the base set every profile mounts, and the web bundle the `serve` profile adds. Nothing here is spawned and nothing here answers a capability, so a bundle is a library with a manifest key. Read this page to see which row list holds what, then open the directory for the list itself.
+A profile does not name plugins one by one. It names bundles, and a bundle is a package that exports a list of rows and declares those row packages as dependencies. Two bundles exist: the base set every profile mounts, and the web bundle the `serve` profile adds. Nothing here is spawned and nothing here answers a capability, so a bundle is a dependency-owning library with a manifest key. Read this page to see which row list holds what, then open the directory for the list itself.
 
 ## Table of Contents
 
@@ -23,10 +23,10 @@ A profile does not name plugins one by one. It names bundles, and a bundle is a 
 
 | Package | Directory | Rows | Role |
 |---|---|---|---|
-| `@maota/base` | [`base`](base/) | 11, of which one is disabled | The set every profile mounts. |
+| `@maota/base` | [`base`](base/) | 30, of which one is disabled | The set every profile mounts. |
 | `@maota/web-bundle` | [`web`](web/) | 1 | The row the `serve` profile adds to the base set. |
 
-A bundle declares its list in `package.json` under `maota.bundle.rows`, and the launcher reads that key to find the file. The default profile mounts `base`; the serve profile mounts `base` and then `web-bundle`, so one more row arrives and nothing else changes.
+A bundle declares its list in `package.json` under `maota.bundle.patch`, declares the row packages under `dependencies`, and the launcher reads both from the bundle. The default profile mounts `base`; the serve profile mounts `base` and then `web-bundle`, so one more row arrives and nothing else changes.
 
 <a id="related-documentation"></a>
 ## Related documentation

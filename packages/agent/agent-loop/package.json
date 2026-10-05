@@ -1,7 +1,6 @@
 {
   "name": "@maota/agent-loop",
-  "version": "0.1.2",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,7 +12,14 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@maota/api-protocol": "workspace:^"
+    "@maota/api-protocol": "workspace:*"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib"
+  ]
 }

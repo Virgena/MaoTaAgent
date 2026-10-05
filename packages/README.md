@@ -21,7 +21,7 @@ Every directory under `packages/` is a package, and each one carries one duty: a
 <a id="packages"></a>
 ## Packages
 
-Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row per spawned package: the row states the package to run and nothing else, the kernel resolves that name out of the profile's own `node_modules`, and the capability comes from the process itself.
+Each profile writes its own `$MAOTA_HOME/profiles/<name>/blmoadll.toml`, one row per spawned package: the row states the package to run and nothing else, the kernel resolves that name out of the profile's own `node_modules`, and the capability comes from the process itself.
 
 | Package | Directory | Capability | Role |
 |---|---|---|---|
@@ -68,7 +68,7 @@ Each profile writes its own `$MAOTA_HOME/profiles/<name>/eggshell.toml`, one row
 | `@maota/web-bundle` | [`bundle/web`](bundle/web/) |  | The single row the `serve` profile adds to the `default` set. |
 
 <a id="bundles"></a>
-A profile's rows come from those two lists: `base` mounts the thirty rows it names in that order, with `hmr` disabled, and `web` adds one row, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), and the list a profile actually uses lives in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
+A profile's rows come from those two lists, and each bundle declares its row packages as dependencies: `base` mounts the thirty rows it owns in that order, with `hmr` disabled, and `web` adds the one row it owns, so only the `serve` profile mounts it. The launcher holds one list per profile (`default` names `base`, `serve` names `base` then `web`), resolves the rows from those bundles, and keeps the list a profile actually uses in `$MAOTA_HOME/profiles/<name>/package.json`, so adding or dropping one never touches this repository. The `web` capability itself comes from `apps/web`, which sits outside this tree.
 
 `pnpm check:plugins` runs every spawned package's entry with `--check` and validates `provides`, `injects`, `registrations`, `hostCalls`, `configKeys` and `selfCheck` without a kernel.
 

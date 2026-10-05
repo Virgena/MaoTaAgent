@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@virgena/blmoadll': link:../blmoadll
+
 importers:
 
   .:
@@ -12,135 +15,21 @@ importers:
         specifier: ^7.0.2
         version: 7.0.2
     devDependencies:
-      '@maota/agent-core':
-        specifier: workspace:^
-        version: link:packages/agent/agent-core
-      '@maota/agent-runner':
-        specifier: workspace:^
-        version: link:packages/agent/agent-runner
-      '@maota/api':
-        specifier: workspace:^
-        version: link:packages/api
-      '@maota/base':
-        specifier: workspace:^
-        version: link:packages/bundle/base
-      '@maota/context-agent-instructions':
-        specifier: workspace:^
-        version: link:packages/context/agent-instructions
-      '@maota/hmr':
-        specifier: workspace:^
-        version: link:packages/boot/hmr
       '@maota/hook-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:packages/hooks/hook-protocol
-      '@maota/hooks-native':
-        specifier: workspace:^
-        version: link:packages/hooks/hooks-native
       '@maota/host':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:packages/boot/host
-      '@maota/i18n-native':
-        specifier: workspace:^
-        version: link:i18n/i18n-native
-      '@maota/i18n-protocol':
-        specifier: workspace:^
-        version: link:i18n/i18n-protocol
-      '@maota/jobs':
-        specifier: workspace:^
-        version: link:packages/jobs/jobs
-      '@maota/memory':
-        specifier: workspace:^
-        version: link:packages/memory/memory
-      '@maota/model-anthropic':
-        specifier: workspace:^
-        version: link:packages/model/model-anthropic
-      '@maota/model-api':
-        specifier: workspace:^
-        version: link:packages/model/model-api
-      '@maota/model-openai':
-        specifier: workspace:^
-        version: link:packages/model/model-openai
-      '@maota/model-protocol':
-        specifier: workspace:^
-        version: link:packages/model/model-protocol
-      '@maota/model-router':
-        specifier: workspace:^
-        version: link:packages/model/model-router
-      '@maota/model-scripted':
-        specifier: workspace:^
-        version: link:packages/model/model-scripted
-      '@maota/permission':
-        specifier: workspace:^
-        version: link:packages/interaction/permission
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:packages/plugin-kit
-      '@maota/pwsh-local':
-        specifier: workspace:^
-        version: link:packages/shell/pwsh-local
-      '@maota/schedule':
-        specifier: workspace:^
-        version: link:packages/schedule/schedule
-      '@maota/session':
-        specifier: workspace:^
-        version: link:packages/session
-      '@maota/settings':
-        specifier: workspace:^
-        version: link:packages/settings/settings
-      '@maota/skill':
-        specifier: workspace:^
-        version: link:packages/skill/skill
-      '@maota/skill-bundled':
-        specifier: workspace:^
-        version: link:packages/skill/skill-bundled
-      '@maota/skill-filesystem':
-        specifier: workspace:^
-        version: link:packages/skill/skill-filesystem
-      '@maota/system-prompt':
-        specifier: workspace:^
-        version: link:packages/agent/system-prompt
-      '@maota/tool-cron':
-        specifier: workspace:^
-        version: link:packages/schedule/tool-cron
-      '@maota/tool-fs':
-        specifier: workspace:^
-        version: link:packages/fs/tool-fs
-      '@maota/tool-fs-search':
-        specifier: workspace:^
-        version: link:packages/fs/tool-fs-search
-      '@maota/tool-jobs':
-        specifier: workspace:^
-        version: link:packages/jobs/tool-jobs
-      '@maota/tool-pwsh':
-        specifier: workspace:^
-        version: link:packages/shell/tool-pwsh
-      '@maota/tool-skill':
-        specifier: workspace:^
-        version: link:packages/skill/tool-skill
-      '@maota/tool-subagent':
-        specifier: workspace:^
-        version: link:packages/subagent/tool-subagent
-      '@maota/tool-todo':
-        specifier: workspace:^
-        version: link:packages/todo/tool-todo
-      '@maota/tools':
-        specifier: workspace:^
-        version: link:packages/agent/tools
-      '@maota/web':
-        specifier: workspace:^
-        version: link:apps/web
-      '@maota/web-bundle':
-        specifier: workspace:^
-        version: link:packages/bundle/web
-      '@maota/workspace':
-        specifier: workspace:^
-        version: link:packages/workspace/workspace
       '@types/node':
         specifier: ^22.20.2
         version: 22.20.2
-      eggshell-kernel:
-        specifier: link:..\eggshellmod\npm
-        version: link:../eggshellmod/npm
+      '@virgena/blmoadll':
+        specifier: link:../blmoadll
+        version: link:../blmoadll
       tsdown:
         specifier: ^0.23.0
         version: 0.23.0(typescript@7.0.2)
@@ -148,26 +37,32 @@ importers:
   apps/cli:
     dependencies:
       '@maota/app-boot':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/boot/app-boot
+      '@maota/base':
+        specifier: workspace:*
+        version: link:../../packages/bundle/base
       '@maota/host':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/boot/host
+      '@maota/plugin-kit':
+        specifier: workspace:*
+        version: link:../../packages/plugin-kit
+      '@maota/web-bundle':
+        specifier: workspace:*
+        version: link:../../packages/bundle/web
 
   apps/web:
     dependencies:
       '@maota/i18n-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../i18n/i18n-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-kit
       dompurify:
         specifier: ^3
         version: 3.4.15
-      maotaui:
-        specifier: link:../../../MaoTaUI
-        version: link:../../../MaoTaUI
       marked:
         specifier: ^16
         version: 16.0.0
@@ -179,7 +74,7 @@ importers:
         version: 19.3.0(react@19.3.0)
     devDependencies:
       '@maota/host':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/boot/host
       '@types/node':
         specifier: ^22
@@ -190,12 +85,15 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.3.0(@types/react@19.3.0)
+      '@virgena/blmoadll':
+        specifier: link:../../../blmoadll
+        version: link:../../../blmoadll
       '@vitejs/plugin-react':
         specifier: ^5
         version: 5.2.0(vite@7.3.6(@types/node@22.20.2))
-      eggshell-kernel:
-        specifier: link:../../../eggshellmod/npm
-        version: link:../../../eggshellmod/npm
+      maotaui:
+        specifier: link:../../../MaoTaUI
+        version: link:../../../MaoTaUI
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -206,10 +104,10 @@ importers:
   i18n/i18n-native:
     dependencies:
       '@maota/i18n-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../i18n-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/plugin-kit
 
   i18n/i18n-protocol: {}
@@ -217,109 +115,231 @@ importers:
   packages/agent/agent-core:
     dependencies:
       '@maota/agent-loop':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../agent-loop
       '@maota/hook-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../hooks/hook-protocol
       '@maota/model-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../model/model-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/agent/agent-loop:
     dependencies:
       '@maota/api-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../api/api-protocol
 
   packages/agent/agent-runner:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/agent/system-prompt:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/agent/tools:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/api:
     dependencies:
       '@maota/api-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:api-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../plugin-kit
 
   packages/api/api-protocol: {}
 
   packages/boot/app-boot:
     dependencies:
-      eggshell-kernel:
-        specifier: link:../../../../eggshellmod/npm
-        version: link:../../../../eggshellmod/npm
+      '@maota/plugin-kit':
+        specifier: workspace:*
+        version: link:../../plugin-kit
+      '@virgena/blmoadll':
+        specifier: link:../../../../blmoadll
+        version: link:../../../../blmoadll
+      semver:
+        specifier: ^7.7.3
+        version: 7.8.5
+      smol-toml:
+        specifier: ^1.4.2
+        version: 1.9.0
+    devDependencies:
+      '@maota/base':
+        specifier: workspace:*
+        version: link:../../bundle/base
+      '@maota/web-bundle':
+        specifier: workspace:*
+        version: link:../../bundle/web
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.8.0
 
   packages/boot/hmr:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/boot/host:
     devDependencies:
-      eggshell-kernel:
-        specifier: link:../../../../eggshellmod/npm
-        version: link:../../../../eggshellmod/npm
+      '@virgena/blmoadll':
+        specifier: link:../../../../blmoadll
+        version: link:../../../../blmoadll
 
-  packages/bundle/base: {}
+  packages/bundle/base:
+    dependencies:
+      '@maota/agent-core':
+        specifier: workspace:*
+        version: link:../../agent/agent-core
+      '@maota/agent-runner':
+        specifier: workspace:*
+        version: link:../../agent/agent-runner
+      '@maota/context-agent-instructions':
+        specifier: workspace:*
+        version: link:../../context/agent-instructions
+      '@maota/hmr':
+        specifier: workspace:*
+        version: link:../../boot/hmr
+      '@maota/hooks-native':
+        specifier: workspace:*
+        version: link:../../hooks/hooks-native
+      '@maota/i18n-native':
+        specifier: workspace:*
+        version: link:../../../i18n/i18n-native
+      '@maota/jobs':
+        specifier: workspace:*
+        version: link:../../jobs/jobs
+      '@maota/memory':
+        specifier: workspace:*
+        version: link:../../memory/memory
+      '@maota/model-anthropic':
+        specifier: workspace:*
+        version: link:../../model/model-anthropic
+      '@maota/model-openai':
+        specifier: workspace:*
+        version: link:../../model/model-openai
+      '@maota/model-router':
+        specifier: workspace:*
+        version: link:../../model/model-router
+      '@maota/permission':
+        specifier: workspace:*
+        version: link:../../interaction/permission
+      '@maota/pwsh-local':
+        specifier: workspace:*
+        version: link:../../shell/pwsh-local
+      '@maota/schedule':
+        specifier: workspace:*
+        version: link:../../schedule/schedule
+      '@maota/session':
+        specifier: workspace:*
+        version: link:../../session
+      '@maota/settings':
+        specifier: workspace:*
+        version: link:../../settings/settings
+      '@maota/skill':
+        specifier: workspace:*
+        version: link:../../skill/skill
+      '@maota/skill-bundled':
+        specifier: workspace:*
+        version: link:../../skill/skill-bundled
+      '@maota/skill-filesystem':
+        specifier: workspace:*
+        version: link:../../skill/skill-filesystem
+      '@maota/system-prompt':
+        specifier: workspace:*
+        version: link:../../agent/system-prompt
+      '@maota/tool-cron':
+        specifier: workspace:*
+        version: link:../../schedule/tool-cron
+      '@maota/tool-fs':
+        specifier: workspace:*
+        version: link:../../fs/tool-fs
+      '@maota/tool-fs-search':
+        specifier: workspace:*
+        version: link:../../fs/tool-fs-search
+      '@maota/tool-jobs':
+        specifier: workspace:*
+        version: link:../../jobs/tool-jobs
+      '@maota/tool-pwsh':
+        specifier: workspace:*
+        version: link:../../shell/tool-pwsh
+      '@maota/tool-skill':
+        specifier: workspace:*
+        version: link:../../skill/tool-skill
+      '@maota/tool-subagent':
+        specifier: workspace:*
+        version: link:../../subagent/tool-subagent
+      '@maota/tool-todo':
+        specifier: workspace:*
+        version: link:../../todo/tool-todo
+      '@maota/tools':
+        specifier: workspace:*
+        version: link:../../agent/tools
+      '@maota/workspace':
+        specifier: workspace:*
+        version: link:../../workspace/workspace
+    devDependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:*
+        version: link:../../plugin-kit
 
-  packages/bundle/web: {}
+  packages/bundle/web:
+    dependencies:
+      '@maota/web':
+        specifier: workspace:*
+        version: link:../../../apps/web
+    devDependencies:
+      '@maota/plugin-kit':
+        specifier: workspace:*
+        version: link:../../plugin-kit
 
   packages/context/agent-instructions:
     dependencies:
       '@maota/fs':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../fs/fs
       '@maota/hook-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../hooks/hook-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/fs/fs:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/fs/tool-fs:
     dependencies:
       '@maota/fs':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../fs
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/fs/tool-fs-search:
     dependencies:
       '@maota/fs':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../fs
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/hooks/hook-protocol: {}
@@ -327,94 +347,94 @@ importers:
   packages/hooks/hooks-native:
     dependencies:
       '@maota/hook-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../hook-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/interaction/permission:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/jobs/jobs:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/jobs/tool-jobs:
     dependencies:
       '@maota/jobs':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../jobs
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/memory/memory:
     dependencies:
       '@maota/fs':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../fs/fs
       '@maota/hook-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../hooks/hook-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/model/model-anthropic:
     dependencies:
       '@maota/model-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../model-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/model/model-api:
     dependencies:
       '@maota/model-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../model-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/model/model-openai:
     dependencies:
       '@maota/model-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../model-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/model/model-protocol:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/model/model-router:
     dependencies:
       '@maota/model-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../model-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/model/model-scripted:
     dependencies:
       '@maota/model-protocol':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../model-protocol
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/plugin-kit: {}
@@ -422,40 +442,40 @@ importers:
   packages/schedule/schedule:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
       '@maota/shell':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../shell/shell
 
   packages/schedule/tool-cron:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
       '@maota/schedule':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../schedule
 
   packages/session:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../plugin-kit
 
   packages/settings/settings:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/shell/pwsh-local:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
       '@maota/shell':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../shell
 
   packages/shell/shell: {}
@@ -463,61 +483,61 @@ importers:
   packages/shell/tool-pwsh:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
       '@maota/shell':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../shell
 
   packages/skill/skill:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/skill/skill-bundled:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
       '@maota/skill':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../skill
 
   packages/skill/skill-filesystem:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
       '@maota/skill':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../skill
 
   packages/skill/tool-skill:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
       '@maota/skill':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../skill
 
   packages/subagent/tool-subagent:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/todo/tool-todo:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
   packages/workspace/workspace:
     dependencies:
       '@maota/plugin-kit':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../plugin-kit
 
 packages:
@@ -1064,6 +1084,9 @@ packages:
   '@types/react@19.3.0':
     resolution: {integrity: sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg==}
 
+  '@types/semver@7.8.0':
+    resolution: {integrity: sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==}
+
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
 
@@ -1529,6 +1552,15 @@ packages:
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
+
+  semver@7.8.5:
+    resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  smol-toml@1.9.0:
+    resolution: {integrity: sha512-hpd+HLON7HdZXqYchMM/+LaTTbdK0AU3NngIJ4KVyWbY9bfQqdL9cD+4yf6dUoU2Ap4VsU0JkQi6FxAI1B2mXQ==}
+    engines: {node: '>= 18'}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -2040,6 +2072,8 @@ snapshots:
     dependencies:
       csstype: 3.2.3
 
+  '@types/semver@7.8.0': {}
+
   '@types/trusted-types@2.0.7':
     optional: true
 
@@ -2386,6 +2420,10 @@ snapshots:
   scheduler@0.28.0: {}
 
   semver@6.3.1: {}
+
+  semver@7.8.5: {}
+
+  smol-toml@1.9.0: {}
 
   source-map-js@1.2.1: {}
 

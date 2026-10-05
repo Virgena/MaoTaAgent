@@ -1,5 +1,5 @@
 ---
-description: "Spawn the eggshell kernel from Node and drive it: invoke capabilities, stream chunks, subscribe to events, and shut it down over the kernel's stdio protocol."
+description: "Spawn the blmoadll kernel from Node and drive it: invoke capabilities, stream chunks, subscribe to events, and shut it down over the kernel's stdio protocol."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Boot one eggshell kernel as a child process and talk to it from Node: ask for the capability table, invoke a capability, consume a stream of chunks, subscribe to kernel events, and shut the process down with a reason. The host owns framing, backpressure, cancellation and the failure text you see when a kernel dies, so callers never touch raw stdio. Use it from any Node front end; the CLI and the smoke tests are the current callers. It does not resolve paths or read configuration.
+Boot one blmoadll kernel as a child process and talk to it from Node: ask for the capability table, invoke a capability, consume a stream of chunks, subscribe to kernel events, and shut the process down with a reason. The host owns framing, backpressure, cancellation and the failure text you see when a kernel dies, so callers never touch raw stdio. Use it from any Node front end; the CLI and the smoke tests are the current callers. It does not resolve paths or read configuration.
 
 ## Table of Contents
 
@@ -42,7 +42,7 @@ process.exit(await kernel.shutdown("ui_quit"));
 
 | Option | Default | Meaning |
 |---|---|---|
-| `bin` | `EGGSHELL_BIN`, else `eggshell` | Kernel binary to spawn. |
+| `bin` | `BLMOADLL_BIN`, else `blmoadll` | Kernel binary to spawn. |
 | `cwd` | the parent's cwd | Working directory for the child. |
 | `env` | `process.env` | Environment for the child. |
 | `onLog` | write stderr through | Callback for each JSON log line the kernel writes to stderr. |

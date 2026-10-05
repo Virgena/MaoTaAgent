@@ -1,7 +1,6 @@
 {
   "name": "@maota/api-protocol",
-  "version": "0.1.1",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -12,5 +11,12 @@
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib"
+  ]
 }

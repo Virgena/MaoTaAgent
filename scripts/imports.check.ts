@@ -87,7 +87,7 @@ function declarations(manifest: string): Set<string> {
 }
 
 function packageOf(specifier: string): string | null {
-  if (specifier === "eggshell-kernel") return specifier;
+  if (specifier === "@virgena/blmoadll") return specifier;
   if (!specifier.startsWith("@maota/")) return null;
   return specifier.split("/").slice(0, 2).join("/");
 }

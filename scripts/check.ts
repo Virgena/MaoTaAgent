@@ -73,6 +73,7 @@ const CHECKS: Step[] = [
   { name: "docs/i18n", cmd: "node docs/i18n.check.ts" },
   { name: "i18n/dictionaries", cmd: "node scripts/i18n.check.ts" },
   { name: "imports", cmd: "node scripts/imports.check.ts" },
+  { name: "versions", cmd: "node scripts/version.check.ts" },
   { name: "file-size", cmd: "node scripts/file-size.check.ts" },
   { name: "plugin-kit/config-keys", cmd: "node packages/plugin-kit/src/config-keys.check.ts" },
   { name: "plugin-kit/tool-schema", cmd: "node packages/plugin-kit/src/tool-schema.check.ts" },

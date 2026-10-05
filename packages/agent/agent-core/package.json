@@ -1,7 +1,6 @@
 {
   "name": "@maota/agent-core",
-  "version": "0.1.6",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,10 +12,17 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@maota/agent-loop": "workspace:^",
-    "@maota/hook-protocol": "workspace:^",
-    "@maota/model-protocol": "workspace:^",
-    "@maota/plugin-kit": "workspace:^"
+    "@maota/agent-loop": "workspace:*",
+    "@maota/hook-protocol": "workspace:*",
+    "@maota/model-protocol": "workspace:*",
+    "@maota/plugin-kit": "workspace:*"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib"
+  ]
 }

@@ -1,7 +1,6 @@
 {
   "name": "@maota/base",
-  "version": "0.1.5",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -14,8 +13,55 @@
   },
   "maota": {
     "bundle": {
-      "rows": "./src/rows.ts"
+      "patch": "./patch.toml",
+      "protocol": 3
     }
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "dependencies": {
+    "@maota/model-openai": "workspace:*",
+    "@maota/model-anthropic": "workspace:*",
+    "@maota/model-router": "workspace:*",
+    "@maota/settings": "workspace:*",
+    "@maota/i18n-native": "workspace:*",
+    "@maota/jobs": "workspace:*",
+    "@maota/pwsh-local": "workspace:*",
+    "@maota/permission": "workspace:*",
+    "@maota/tool-pwsh": "workspace:*",
+    "@maota/tool-jobs": "workspace:*",
+    "@maota/tool-fs": "workspace:*",
+    "@maota/tool-fs-search": "workspace:*",
+    "@maota/tool-todo": "workspace:*",
+    "@maota/tool-subagent": "workspace:*",
+    "@maota/skill-filesystem": "workspace:*",
+    "@maota/skill-bundled": "workspace:*",
+    "@maota/skill": "workspace:*",
+    "@maota/tool-skill": "workspace:*",
+    "@maota/tools": "workspace:*",
+    "@maota/session": "workspace:*",
+    "@maota/workspace": "workspace:*",
+    "@maota/system-prompt": "workspace:*",
+    "@maota/context-agent-instructions": "workspace:*",
+    "@maota/memory": "workspace:*",
+    "@maota/hooks-native": "workspace:*",
+    "@maota/agent-core": "workspace:*",
+    "@maota/agent-runner": "workspace:*",
+    "@maota/schedule": "workspace:*",
+    "@maota/tool-cron": "workspace:*",
+    "@maota/hmr": "workspace:*"
+  },
+  "peerDependencies": {
+    "@maota/plugin-kit": "^0.1.0"
+  },
+  "devDependencies": {
+    "@maota/plugin-kit": "workspace:*"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib",
+    "patch.toml"
+  ]
 }

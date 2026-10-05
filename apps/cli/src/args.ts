@@ -14,6 +14,7 @@ export type Parsed =
   | ({ kind: "check"; json: boolean } & Launch)
   | ({ kind: "jobs"; action: string; args: string[] } & Launch)
   | ({ kind: "cron"; action: string; args: string[] } & Launch)
+  | ({ kind: "plugin"; action: string; args: string[] } & Launch)
   | ({ kind: "once"; question: string } & Launch)
   | ({ kind: "repl" } & Launch)
   | { kind: "usage"; message: string };
@@ -26,7 +27,7 @@ export function parseArgs(argv: string[]): Parsed {
   let json = false;
   let help = false;
   let version = false;
-  let subcommand: "serve" | "check" | "jobs" | "cron" | null = null;
+  let subcommand: "serve" | "check" | "jobs" | "cron" | "plugin" | null = null;
   const words: string[] = [];
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -53,11 +54,15 @@ export function parseArgs(argv: string[]): Parsed {
       else session = value;
       continue;
     }
+    if (subcommand === "plugin") {
+      words.push(token);
+      continue;
+    }
     if (token.startsWith("-") && token !== "-") return { kind: "usage", message: `unknown option: ${token}` };
     if (subcommand === "serve" || subcommand === "check") {
       return { kind: "usage", message: `${subcommand} takes no further arguments: ${token}` };
     }
-    if (words.length === 0 && (token === "serve" || token === "check" || token === "jobs" || token === "cron")) {
+    if (words.length === 0 && (token === "serve" || token === "check" || token === "jobs" || token === "cron" || token === "plugin")) {
       subcommand = token;
       continue;
     }
@@ -71,6 +76,7 @@ export function parseArgs(argv: string[]): Parsed {
   if (subcommand === "check") return { kind: "check", json, ...launch };
   if (subcommand === "jobs") return { kind: "jobs", action: words[0] ?? "", args: words.slice(1), ...launch };
   if (subcommand === "cron") return { kind: "cron", action: words[0] ?? "", args: words.slice(1), ...launch };
+  if (subcommand === "plugin") return { kind: "plugin", action: words[0] ?? "", args: words.slice(1), ...launch };
   const question = words.join(" ");
   return question === "" ? { kind: "repl", ...launch } : { kind: "once", question, ...launch };
 }

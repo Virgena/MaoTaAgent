@@ -1,5 +1,5 @@
 ---
-description: "The boot package group: how one maota launch resolves its config and kernel binary, how the Node host drives the eggshell kernel over stdio, and the watcher that reports source changes."
+description: "The boot package group: how one maota launch resolves its config and kernel binary, how the Node host drives the blmoadll kernel over stdio, and the watcher that reports source changes."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-MaoTa runs the eggshell kernel as a child process and talks to it over stdio; the boot group owns both halves of that launch. Read it when you are changing how a launch finds its config file or kernel binary, or how the Node side invokes capabilities, streams chunks, subscribes to events and shuts the kernel down. The group holds no plugin logic and never interprets plugin config values. It is a library family rather than a plugin set, with one member that is a plugin: `hmr`.
+MaoTa runs the blmoadll kernel as a child process and talks to it over stdio; the boot group owns both halves of that launch. Read it when you are changing how a launch finds its config file or kernel binary, or how the Node side invokes capabilities, streams chunks, subscribes to events and shuts the kernel down. The group holds no plugin logic and never interprets plugin config values. It is a library family rather than a plugin set, with one member that is a plugin: `hmr`.
 
 ## Table of Contents
 

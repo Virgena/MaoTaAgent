@@ -3,16 +3,16 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { kernel as installedKernel } from "eggshell-kernel";
+import { kernel as installedKernel } from "@virgena/blmoadll";
 
 import { boot, type Chunk } from "@maota/host";
 
 const root = join(import.meta.dirname, "..", "..");
 const kernelBin =
   process.argv[2] ??
-  process.env.EGGSHELL_BIN ??
+  process.env.BLMOADLL_BIN ??
   installedKernel ??
-  join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
+  join(root, "..", "blmoadll", "target", "debug", "blmoadll.exe");
 
 function plugin(id: string, pkg: string): string[] {
   return [
@@ -31,7 +31,7 @@ writeFileSync(
 );
 
 writeFileSync(
-  join(dir, "eggshell.toml"),
+  join(dir, "blmoadll.toml"),
   [
     ...plugin("model-scripted", "model/model-scripted"),
     ...plugin("model-router", "model/model-router"),
@@ -49,11 +49,11 @@ writeFileSync(
     "",
   ].join("\n"),
 );
-const config = join(dir, "eggshell.local.toml");
+const config = join(dir, "blmoadll.local.toml");
 writeFileSync(
   config,
   [
-    'extends = ["eggshell.toml"]',
+    'extends = ["blmoadll.toml"]',
     "",
     "[plugins.model-scripted.config]",
     "script = [",

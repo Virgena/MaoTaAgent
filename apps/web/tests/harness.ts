@@ -7,7 +7,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { kernel as installed } from "eggshell-kernel";
+import { kernel as installed } from "@virgena/blmoadll";
 
 import { boot } from "@maota/host";
 
@@ -17,9 +17,9 @@ export const LONG = "lorem-ipsum-".repeat(1400);
 export const root = join(import.meta.dirname, "..", "..", "..");
 const bin =
   process.argv[2] ??
-  process.env.EGGSHELL_BIN ??
+  process.env.BLMOADLL_BIN ??
   installed ??
-  join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
+  join(root, "..", "blmoadll", "target", "debug", "blmoadll.exe");
 
 const PLUGINS: Array<[string, string]> = [
   ["model-router", "packages/model/model-router/src/index.ts"],
@@ -45,7 +45,7 @@ const PLUGINS: Array<[string, string]> = [
 ];
 
 export const home = mkdtempSync(join(tmpdir(), "maota-web-"));
-const config = join(home, "eggshell.local.toml");
+const config = join(home, "blmoadll.local.toml");
 
 writeFileSync(
   join(home, "models.json"),
@@ -58,7 +58,7 @@ writeFileSync(
 );
 
 writeFileSync(
-  join(home, "eggshell.toml"),
+  join(home, "blmoadll.toml"),
   PLUGINS.map(
     ([id, main]) => `[plugins.${id}]\ncommand = '${process.execPath}'\nargs = ['${join(root, main)}']\n`,
   ).join("\n"),
@@ -67,7 +67,7 @@ writeFileSync(
 writeFileSync(
   config,
   [
-    'extends = ["eggshell.toml"]',
+    'extends = ["blmoadll.toml"]',
     "",
     "[plugins.model-scripted.config]",
     "script = [",

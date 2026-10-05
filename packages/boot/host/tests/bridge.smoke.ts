@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fixture as fixtureBin, kernel as kernelBin } from "eggshell-kernel";
+import { fixture as fixtureBin, kernel as kernelBin } from "@virgena/blmoadll";
 
 import { boot, KernelError, type Chunk, type Event } from "../src/index.ts";
 
-const [eggshellArg, fixtureArg] = process.argv.slice(2);
-const eggshell = eggshellArg ?? kernelBin;
+const [blmoadllArg, fixtureArg] = process.argv.slice(2);
+const blmoadll = blmoadllArg ?? kernelBin;
 const fixture = fixtureArg ?? fixtureBin;
-if (!eggshell || !fixture) {
-  throw new Error("usage: node packages/boot/host/tests/bridge.smoke.ts [eggshell] [eggshell-fixture] (defaults to node_modules/eggshell-kernel/bin)");
+if (!blmoadll || !fixture) {
+  throw new Error("usage: node packages/boot/host/tests/bridge.smoke.ts [blmoadll] [blmoadll-fixture] (defaults to node_modules/@virgena/blmoadll/bin)");
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -28,7 +28,7 @@ async function nextMatching(events: AsyncIterator<Event>, topic: string): Promis
 }
 
 const dir = mkdtempSync(join(tmpdir(), "maota-bridge-"));
-const config = join(dir, "eggshell.toml");
+const config = join(dir, "blmoadll.toml");
 writeFileSync(
   config,
   `
@@ -44,7 +44,7 @@ args = ["--provides", "demo.other", "--exit-on-invoke"]
 
 const logs: string[] = [];
 const kernel = await boot(config, {
-  bin: eggshell,
+  bin: blmoadll,
   onLog: (line) => logs.push(String(line.message ?? "")),
 });
 

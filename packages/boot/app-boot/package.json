@@ -1,7 +1,6 @@
 {
   "name": "@maota/app-boot",
-  "version": "0.1.1",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,7 +12,22 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "eggshell-kernel": "link:../../../../eggshellmod/npm"
+    "@maota/plugin-kit": "workspace:*",
+    "@virgena/blmoadll": "^0.1.0",
+    "semver": "^7.7.3",
+    "smol-toml": "^1.4.2"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "devDependencies": {
+    "@maota/base": "workspace:*",
+    "@maota/web-bundle": "workspace:*",
+    "@types/semver": "^7.7.1"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib"
+  ]
 }

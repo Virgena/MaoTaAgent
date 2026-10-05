@@ -3,16 +3,16 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { kernel as installedKernel } from "eggshell-kernel";
+import { kernel as installedKernel } from "@virgena/blmoadll";
 
 import { boot } from "@maota/host";
 
 const root = join(import.meta.dirname, "..", "..");
 const kernelBin =
   process.argv[2] ??
-  process.env.EGGSHELL_BIN ??
+  process.env.BLMOADLL_BIN ??
   installedKernel ??
-  join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
+  join(root, "..", "blmoadll", "target", "debug", "blmoadll.exe");
 
 const PERSONA = "speak in the deployment's own voice";
 
@@ -20,7 +20,7 @@ type Assembly = { text: string; sections: Array<{ name: string; order: number; s
 
 const dir = mkdtempSync(join(tmpdir(), "maota-prompt-"));
 writeFileSync(
-  join(dir, "eggshell.toml"),
+  join(dir, "blmoadll.toml"),
   [
     "[plugins.system-prompt]",
     `command = '${process.execPath}'`,
@@ -32,7 +32,7 @@ const config = join(dir, "config.toml");
 writeFileSync(
   config,
   [
-    'extends = ["eggshell.toml"]',
+    'extends = ["blmoadll.toml"]',
     "",
     "[plugins.system-prompt.config]",
     `persona = "${PERSONA}"`,

@@ -3,17 +3,17 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { kernel as installedKernel } from "eggshell-kernel";
+import { kernel as installedKernel } from "@virgena/blmoadll";
 
 import { boot } from "@maota/host";
 
 const root = join(import.meta.dirname, "..", "..");
-const kernelBin = process.argv[2] ?? process.env.EGGSHELL_BIN ?? installedKernel ?? join(root, "..", "eggshellmod", "target", "debug", "eggshell.exe");
+const kernelBin = process.argv[2] ?? process.env.BLMOADLL_BIN ?? installedKernel ?? join(root, "..", "blmoadll", "target", "debug", "blmoadll.exe");
 const dir = mkdtempSync(join(tmpdir(), "maota-jobs-"));
 function plugin(id: string, pkg: string): string[] {
   return [`[plugins.${id}]`, `command = '${process.execPath}'`, `args = ['${join(root, "packages", pkg, "src", "index.ts")}']`, ""];
 }
-const config = join(dir, "eggshell.toml");
+const config = join(dir, "blmoadll.toml");
 writeFileSync(config, [...plugin("jobs", "jobs/jobs"), ...plugin("shell", "shell/pwsh-local"), ""].join("\n"));
 const kernel = await boot(config, { bin: kernelBin, env: { ...process.env, MAOTA_HOME: dir } });
 try {

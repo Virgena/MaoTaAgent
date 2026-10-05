@@ -1,5 +1,5 @@
 ---
-description: "从 Node 拉起 eggshell 内核并驱动它：在内核的 stdio 协议上 invoke 能力、收流、订阅事件、停机。"
+description: "从 Node 拉起 blmoadll 内核并驱动它：在内核的 stdio 协议上 invoke 能力、收流、订阅事件、停机。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-把一个 eggshell 内核当子进程拉起来，再从 Node 这一侧跟它说话：要能力表、invoke 一个能力、消费一条分片流、订阅内核事件、带原因让它停机。帧、背压、取消，以及内核死掉时你看到的那段失败说明都归宿主管，所以调用方永远不碰裸 stdio。任何 Node 前端都可以用它；今天的调用方是 CLI 与冒烟测试。它不定路径、不读配置。
+把一个 blmoadll 内核当子进程拉起来，再从 Node 这一侧跟它说话：要能力表、invoke 一个能力、消费一条分片流、订阅内核事件、带原因让它停机。帧、背压、取消，以及内核死掉时你看到的那段失败说明都归宿主管，所以调用方永远不碰裸 stdio。任何 Node 前端都可以用它；今天的调用方是 CLI 与冒烟测试。它不定路径、不读配置。
 
 ## 目录
 
@@ -42,7 +42,7 @@ process.exit(await kernel.shutdown("ui_quit"));
 
 | 选项 | 缺省 | 含义 |
 |---|---|---|
-| `bin` | `EGGSHELL_BIN`，再退到 `eggshell` | 要拉起来的内核二进制。 |
+| `bin` | `BLMOADLL_BIN`，再退到 `blmoadll` | 要拉起来的内核二进制。 |
 | `cwd` | 父进程的 cwd | 子进程的工作目录。 |
 | `env` | `process.env` | 子进程的环境变量。 |
 | `onLog` | 直接把 stderr 透出去 | 内核写到 stderr 的每条 JSON 日志行的回调。 |

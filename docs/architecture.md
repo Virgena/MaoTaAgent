@@ -23,8 +23,8 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `packages/schedule` | Durable reminders and automation, plus the model-facing `cron_*` management tools. | [README](../packages/schedule/README.md) |
 | `packages/model` | The model routing layer: the internal model protocol, catalog and router, the preserved `api` compatibility adapter, the OpenAI and Anthropic edge adapters, and the scripted test adapter. | `packages/model/*/src/index.ts` |
 | `packages/*` | The kernel plugins: api, model-*, pwsh-local, permission, tool-pwsh, tool-fs, tool-fs-search, tool-todo, tool-subagent, skill-filesystem, skill-bundled, skill, tool-skill, tools, session, system-prompt, hooks and agent. | `packages/<group>/<name>/src/index.ts`, for example `packages/agent/agent-core/src/index.ts` |
-| `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts, by package name. | [packages README](../packages/README.md#bundles) |
-| `eggshell` binary | The kernel itself, plus its stdio protocol. | The `eggshellmod` repository |
+| `packages/bundle/*` | The bundles: each lists the plugin rows a profile mounts and owns those plugin packages as dependencies. | [packages README](../packages/README.md#bundles) |
+| `blmoadll` binary | The kernel itself, plus its stdio protocol. | The `blmoadll` repository |
 
 ## Launch path
 
@@ -38,10 +38,10 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 
 ## Configuration layering
 
-- Nothing lives in the repository root: the launcher reads `$MAOTA_HOME`, default `~/.maota`. Each profile owns a `node_modules` with one link per row, pointing at the package in this repository.
+- Nothing lives in the repository root: the launcher reads `$MAOTA_HOME`, default `~/.maota`. Each profile owns a `node_modules` with one link per row, resolved from the dependency tree of the bundle that owns that row.
 - The launcher picks one profile: serve boots serve (base plus web), every other command boots default (base alone).
-- $MAOTA_HOME/profiles/<name>/eggshell.toml is generated from the bundles that profile lists. Every row names its package, and the kernel resolves that name out of the profile's own `node_modules`, so boot rewrites the file only when the rows change. It holds the plugin set: which plugins exist and how they start, since every plugin keeps its own defaults.
-- `$MAOTA_HOME/profiles/<name>/eggshell.local.toml` holds the machine's layer: gateway, model, keys. It `extends` the generated file and wins over it.
+- $MAOTA_HOME/profiles/<name>/blmoadll.toml is generated from the bundles that profile lists. Every row names its package, and the kernel resolves that name out of the profile's own `node_modules`, so boot rewrites the file only when the rows change. It holds the plugin set: which plugins exist and how they start, since every plugin keeps its own defaults.
+- `$MAOTA_HOME/profiles/<name>/blmoadll.local.toml` holds the machine's layer: gateway, model, keys. It `extends` the generated file and wins over it.
 - A row with `disabled = true` is parsed and merged like any other, but the kernel never spawns it and its capability is not in the routing table. A later layer writing `false` enables it, and the kernel's reloader picks that up without a restart.
 - Later layers win: tables merge key by key, arrays are replaced wholesale.
 - Stray config keys are reported, not blocked, by `pnpm run check:config`.

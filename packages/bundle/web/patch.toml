@@ -1,0 +1,4 @@
+[[patch]]
+insert = [
+  { id = "web", name = "@maota/web" },
+]

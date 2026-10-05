@@ -1,7 +1,6 @@
 {
   "name": "@maota/web-bundle",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -14,8 +13,26 @@
   },
   "maota": {
     "bundle": {
-      "rows": "./src/rows.ts"
+      "patch": "./patch.toml",
+      "protocol": 3
     }
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "dependencies": {
+    "@maota/web": "workspace:*"
+  },
+  "peerDependencies": {
+    "@maota/plugin-kit": "^0.1.0"
+  },
+  "devDependencies": {
+    "@maota/plugin-kit": "workspace:*"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib",
+    "patch.toml"
+  ]
 }

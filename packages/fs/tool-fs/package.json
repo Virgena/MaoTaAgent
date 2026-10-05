@@ -1,7 +1,6 @@
 {
   "name": "@maota/tool-fs",
-  "version": "0.1.1",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -13,8 +12,15 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@maota/fs": "workspace:^",
-    "@maota/plugin-kit": "workspace:^"
+    "@maota/fs": "workspace:*",
+    "@maota/plugin-kit": "workspace:*"
   },
-  "types": "lib/index.d.ts"
+  "types": "lib/index.d.ts",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "lib"
+  ]
 }
