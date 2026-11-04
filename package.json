@@ -42,6 +42,7 @@
     "session:smoke": "node packages/session/tests/session.smoke.ts",
     "settings:smoke": "node packages/settings/settings/tests/settings.smoke.ts",
     "workspace:smoke": "node packages/workspace/workspace/tests/workspace.smoke.ts",
+    "git:smoke": "node packages/git/git/tests/git.smoke.ts",
     "context-instructions:smoke": "node packages/context/agent-instructions/tests/context-instructions.smoke.ts",
     "memory:smoke": "node packages/memory/memory/tests/memory.smoke.ts",
     "permission:smoke": "node packages/interaction/permission/tests/permission.smoke.ts",

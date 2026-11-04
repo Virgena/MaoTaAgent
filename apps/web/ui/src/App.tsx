@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { MainPane } from "./components/MainPane.tsx";
 import type { LiveTurn } from "./components/MessageList.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
 import { DEFAULT_PROJECT } from "./components/Sidebar.tsx";
 import { SidebarPane } from "./components/SidebarPane.tsx";
+import { SidebarResizer } from "./components/SidebarResizer.tsx";
 import { useContextCompact } from "./useContextCompact.ts";
 import { useHostState } from "./useHostState.ts";
 import { useHostEvents } from "./useHostEvents.ts";
+import { useHostStream } from "./useHostStream.ts";
+import { useSidebarWidth } from "./useSidebarWidth.ts";
 import { describe } from "./lib/errors.ts";
 import { adoptCatalog, setLang } from "./lib/i18n.ts";
+import { reasoningFallback } from "./thinking.ts";
 import {
   call,
-  subscribe,
   type AppInfo,
   type Approval,
   type ModelRoute,
@@ -21,6 +24,7 @@ import {
 } from "./lib/rpc.ts";
 
 export function App() {
+  const { width: sidebarWidth, resizing: sidebarResizing, startResize, nudge } = useSidebarWidth();
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [kernelError, setKernelError] = useState<string | null>(null);
   const { settings, workspace, adoptSettings, adoptWorkspace, updateSettings, updateWorkspace } = useHostState({
@@ -33,7 +37,9 @@ export function App() {
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ session: string; text: string } | null>(null);
-  const [page, setPage] = useState<"chat" | "settings" | "plugins" | "tasks">("chat");
+  const [page, setPage] = useState<"chat" | "plugins" | "tasks">("chat");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
   const [picking, setPicking] = useState(false);
   const [manualPath, setManualPath] = useState(false);
@@ -47,6 +53,8 @@ export function App() {
   const turns = useRef(new Map<string, string>());
   const loadSeq = useRef(0);
   const drafts = useRef(new Set<string>());
+  const thinkingVersion = useRef(0);
+  const pendingThinking = useRef(new Map<string, string>());
   const projects = useMemo(() => workspace.projects.map((item) => item.path), [workspace.projects]);
   const names = useMemo(
     () => Object.fromEntries(workspace.projects.filter((item) => item.name !== null).map((item) => [item.path, item.name!])),
@@ -56,13 +64,16 @@ export function App() {
   const archived = workspace.archived_sessions;
   const theme = settings.theme ?? "system";
   const language = settings.locale ?? info?.i18n?.locale ?? "system";
+  const reportFailure = useCallback((session: string, message: string): void => {
+    setFailure({ session, text: message });
+  }, []);
   const { context, clearContext, compactNow, loadContext, onCompactEvent } = useContextCompact({
     activeRef,
     info,
     thinking,
     modelRoute,
     onMessages: setMessages,
-    onFailure: (session, message) => setFailure({ session, text: message }),
+    onFailure: reportFailure,
   });
   const clearSessionView = useCallback((): void => {
     clearContext();
@@ -72,6 +83,8 @@ export function App() {
   }, [clearContext]);
   const newDraft = useCallback((cwd: string): { id: string; cwd: string } => {
     clearSessionView();
+    thinkingVersion.current += 1;
+    pendingThinking.current.clear();
     setModelRoute(null);
     setThinking("off");
     const fresh = { id: crypto.randomUUID(), cwd };
@@ -95,11 +108,19 @@ export function App() {
   }, [theme]);
   const openSession = useCallback(async (id: string, cwd: string): Promise<void> => {
     const seq = ++loadSeq.current;
+    const thinkingAtLoad = thinkingVersion.current;
     try {
       const file = await call<SessionFile>("sessions.load", { id, cwd });
       if (seq !== loadSeq.current) return;
-      setModelRoute(file.model_route?.provider === "api" ? null : file.model_route ?? null);
-      setThinking(file.thinking ?? "off");
+      const storedRoute = file.model_route;
+      setModelRoute(
+        storedRoute === null || storedRoute === undefined || storedRoute.provider === "api"
+          ? null
+          : { provider: storedRoute.provider, model: storedRoute.model },
+      );
+      const pending = pendingThinking.current.get(id);
+      if (pending !== undefined) setThinking(pending);
+      else if (thinkingVersion.current === thinkingAtLoad) setThinking(file.thinking ?? "off");
       setMessages(file.messages ?? []);
       void loadContext(id, cwd);
     } catch (error) {
@@ -108,6 +129,10 @@ export function App() {
       setFailure({ session: id, text: describe(error) });
     }
   }, [loadContext]);
+  const openSessionRef = useRef(openSession);
+  useEffect(() => {
+    openSessionRef.current = openSession;
+  }, [openSession]);
   const refreshSessions = useCallback(async (): Promise<void> => {
     try {
       const reply = await call<{ sessions?: SessionSummary[] }>("sessions.list");
@@ -168,13 +193,31 @@ export function App() {
     }
   }, []);
   const changeThinking = useCallback((level: string): void => {
+    thinkingVersion.current += 1;
     setThinking(level);
     const current = activeRef.current;
     if (current === null || drafts.current.has(current.id)) return;
-    void call("sessions.set_thinking", { id: current.id, cwd: current.cwd, thinking: level }).catch((error: unknown) => {
+    pendingThinking.current.set(current.id, level);
+    void call<SessionFile>(
+      "sessions.set_thinking",
+      { id: current.id, cwd: current.cwd, thinking: level },
+    ).then((file) => {
+      if (pendingThinking.current.get(current.id) !== level) return;
+      pendingThinking.current.delete(current.id);
+      if (activeRef.current?.id === current.id) setThinking(file.thinking ?? level);
+    }).catch((error: unknown) => {
+      if (pendingThinking.current.get(current.id) !== level) return;
+      pendingThinking.current.delete(current.id);
+      if (activeRef.current?.id !== current.id) return;
       setFailure({ session: current.id, text: describe(error) });
+      void openSession(current.id, current.cwd);
     });
-  }, []);
+  }, [openSession]);
+  const changeModelRoute = useCallback((next: ModelRoute | null): void => {
+    setModelRoute(next);
+    const fallback = reasoningFallback(info, next, thinking);
+    if (fallback !== null) changeThinking(fallback);
+  }, [changeThinking, info, thinking]);
   const handleEvent = useHostEvents({
     activeRef,
     turns,
@@ -190,23 +233,24 @@ export function App() {
     setPending,
     setFailure,
   });
+  const reconnect = useCallback((): void => {
+    const current = activeRef.current;
+    if (current !== null && !drafts.current.has(current.id)) {
+      void openSession(current.id, current.cwd);
+      void loadSpawned(current.id, current.cwd);
+      void rebuildApprovals(current.id);
+    }
+    void refreshSessions();
+  }, [loadSpawned, openSession, rebuildApprovals, refreshSessions]);
+  useHostStream({ onEvent: handleEvent, onReconnect: reconnect });
   useEffect(() => {
     void loadInfo();
     void refreshSessions();
   }, [loadInfo, refreshSessions]);
-  useEffect(
-    () =>
-      subscribe(handleEvent, () => {
-        const current = activeRef.current;
-        if (current !== null) {
-          void openSession(current.id, current.cwd);
-          void loadSpawned(current.id, current.cwd);
-          void rebuildApprovals(current.id);
-        }
-        void refreshSessions();
-      }),
-    [handleEvent, loadSpawned, openSession, rebuildApprovals, refreshSessions],
-  );
+  useEffect(() => {
+    const fallback = reasoningFallback(info, modelRoute ?? info?.models?.default_route ?? null, thinking);
+    if (fallback !== null) changeThinking(fallback);
+  }, [changeThinking, info, modelRoute, thinking]);
   useEffect(() => {
     if (active === null) {
       clearSessionView();
@@ -216,30 +260,32 @@ export function App() {
       clearSessionView();
       return;
     }
-    void openSession(active.id, active.cwd);
+    void openSessionRef.current(active.id, active.cwd);
     void loadSpawned(active.id, active.cwd);
     void loadPermission(active.id, active.cwd);
     void rebuildApprovals(active.id);
-  }, [active, clearSessionView, loadPermission, loadSpawned, openSession, rebuildApprovals]);
+  }, [active, clearSessionView, loadPermission, loadSpawned, rebuildApprovals]);
   const send = useCallback(
     async (text: string, at: { id: string; cwd: string }): Promise<void> => {
       if (text.trim() === "") return;
       setFailure(null);
       setPending(text);
       try {
-        await call<{ turn_id: string }>("chat.send", {
+        const reply = await call<{ turn_id: string }>("chat.send", {
           session_id: at.id,
           cwd: at.cwd,
           input: text,
           thinking,
           ...(modelRoute === null ? {} : { route: modelRoute }),
         });
+        turns.current.set(reply.turn_id, at.id);
+        drafts.current.delete(at.id);
       } catch (error) {
         setPending(null);
         setFailure({ session: at.id, text: describe(error) });
       }
     },
-    [modelRoute, thinking],
+    [modelRoute, thinking, turns],
   );
 
   const submit = useCallback(
@@ -309,6 +355,13 @@ export function App() {
     newDraft(cwd);
   };
 
+  const openWorktree = async (path: string): Promise<void> => {
+    const next = await updateWorkspace("workspace.register", { path });
+    if (next === undefined) throw new Error("the worktree was created but could not be added to projects");
+    setProject(path);
+    newChat(path);
+  };
+
   const open = (session: SessionSummary): void => {
     setFailure(null);
     setPending(null);
@@ -358,6 +411,7 @@ export function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      if (settingsOpen) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPalette((was) => !was);
@@ -365,26 +419,10 @@ export function App() {
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
-
-  if (page === "settings") {
-    return (
-      <SettingsView
-        info={info}
-        theme={theme}
-        locale={language}
-        onTheme={(next) => void updateSettings({ theme: next })}
-        onLanguage={(next) => void updateSettings({ locale: next })}
-        onModels={(models) => {
-          setInfo((current) => current === null ? current : { ...current, models });
-        }}
-        onBack={() => setPage("chat")}
-      />
-    );
-  }
+  }, [settingsOpen]);
 
   return (
-    <div className="app">
+    <div className="app" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
       <SidebarPane
         sessions={allSessions}
         activeId={active?.id ?? null}
@@ -397,8 +435,6 @@ export function App() {
         onNew={newChat}
         onProject={setProject}
         onAddProject={addProject}
-        onPickProject={() => void pickProject()}
-        picking={picking}
         manual={manualPath}
         onManual={setManualPath}
         onOpen={open}
@@ -406,16 +442,27 @@ export function App() {
         onRemoveProject={removeProject}
         onPin={flipPin}
         onArchive={flipArchive}
-        onSettings={() => setPage("settings")}
+        onSettings={() => {
+          setPalette(false);
+          setSettingsSection(null);
+          setSettingsOpen(true);
+        }}
         onPlugins={() => setPage("plugins")}
         onTasks={() => setPage("tasks")}
         onSearch={() => setPalette(true)}
+      />
+      <SidebarResizer
+        width={sidebarWidth}
+        resizing={sidebarResizing}
+        onStart={startResize}
+        onNudge={nudge}
       />
       <MainPane
         page={page}
         info={info}
         kernelError={kernelError}
         project={project}
+        projects={projects}
         sessions={allSessions}
         archived={archived}
         names={names}
@@ -437,12 +484,34 @@ export function App() {
         onPickProject={() => void pickProject()}
         onOpen={open}
         onRetry={() => void loadInfo()}
+        onOpenModels={() => {
+          setSettingsSection("models");
+          setSettingsOpen(true);
+        }}
+        onOpenWorktree={openWorktree}
         onThinking={changeThinking}
-        onModelRoute={setModelRoute}
+        onModelRoute={changeModelRoute}
         onPermission={(mode) => void changePermission(mode)}
         onAnswer={(id, decision) => void answer(id, decision)}
         onSend={submit}
         onCancel={() => void cancel()}
+      />
+      <SettingsView
+        open={settingsOpen}
+        requestedSection={settingsSection}
+        info={info}
+        theme={theme}
+        locale={language}
+        onTheme={(next) => void updateSettings({ theme: next })}
+        onLanguage={(next) => void updateSettings({ locale: next })}
+        onModels={(models) => {
+          setInfo((current) => current === null ? current : { ...current, models });
+        }}
+        onSectionHandled={() => setSettingsSection(null)}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsSection(null);
+        }}
       />
     </div>
   );

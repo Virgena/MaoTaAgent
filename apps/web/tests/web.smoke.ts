@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -23,6 +24,8 @@ import {
   waitFor,
   type Frame,
 } from "./harness.ts";
+import { groupTraceTools, toolTarget, transcriptBlocks } from "../ui/src/execution.ts";
+import { reasoningFallback } from "../ui/src/thinking.ts";
 
 console.log(`web smoke: ${base}\n`);
 
@@ -41,6 +44,62 @@ await check("app.info", async () => {
     `sessions dir should live under MAOTA_HOME, got ${appInfo.sessions_dir}`,
   );
   assert.deepEqual((await call("sessions.list")).sessions, [], "a fresh home should list no sessions");
+});
+
+await check("reasoning fallback", async () => {
+  const catalog = {
+    levels: ["off", "low", "medium", "high"],
+    models: {
+      models: [{ provider: "p", model: "m", reasoning_efforts: ["low", "max"] }],
+    },
+  };
+  const route = { provider: "p", model: "m" };
+  assert.equal(reasoningFallback(catalog, route, "high"), "low", "an unsupported level should use a valid model level");
+  assert.equal(reasoningFallback(catalog, route, "low"), null, "a supported level should stay put");
+  assert.equal(reasoningFallback(catalog, route, "off"), null, "off should remain available without model metadata");
+});
+
+await check("execution trace grouping", async () => {
+  const tools = [
+    { id: "a", tool: "read", args: { file_path: "src/a.ts" }, ok: true },
+    { id: "b", tool: "grep", args: { pattern: "needle" }, ok: true },
+    { id: "c", tool: "pwsh", args: { command: "echo hi" }, ok: true },
+    { id: "d", tool: "read", args: { file_path: "bad.ts" }, ok: false },
+  ];
+  const entries = groupTraceTools(tools);
+  assert.equal(entries[0]?.kind, "group", "two successful exploration calls should form one group");
+  assert.equal(entries[0]?.kind === "group" ? entries[0].tools.length : 0, 2);
+  assert.equal(entries[1]?.kind, "tool", "commands should stay outside the exploration group");
+  assert.equal(entries[2]?.kind, "tool", "a failed read should stay outside the exploration group");
+  assert.equal(toolTarget("read", tools[0]!.args), "src/a.ts");
+
+  const blocks = transcriptBlocks([
+    {
+      role: "assistant",
+      content: null,
+      tool_calls: [{ id: "read-1", function: { name: "read", arguments: '{"file_path":"src/a.ts"}' } }],
+    },
+    { role: "tool", tool_call_id: "read-1", name: "read", content: "1| hello" },
+    { role: "assistant", content: "done" },
+  ]);
+  assert.equal(blocks[0]?.kind, "execution", "history tool traffic should become an execution record");
+  assert.equal(blocks[0]?.kind === "execution" ? blocks[0].tools[0]?.output : null, "1| hello");
+  assert.equal(blocks[0]?.kind === "execution" ? blocks[0].text : "", "done");
+  const traced = transcriptBlocks([
+    { role: "assistant", content: "answer", reasoning: "checked the path", reasoning_ms: 1200, steps: 1 },
+  ]);
+  assert.equal(traced[0]?.kind, "execution", "a direct answer with trace metadata should keep its record");
+  assert.equal(traced[0]?.kind === "execution" ? traced[0].reasoning : "", "checked the path");
+  assert.equal(traced[0]?.kind === "execution" ? traced[0].reasoningMs : 0, 1200);
+  const hiddenCatalog = transcriptBlocks([
+    { role: "user", name: "skill-catalog", content: "<available>", source: { kind: "skill-catalog", entries: [] } },
+    { role: "assistant", content: "answer" },
+  ]);
+  assert.equal(
+    hiddenCatalog.some((entry) => entry.kind === "message" && entry.message.source?.kind === "skill-catalog"),
+    false,
+    "the available skill catalog should not appear as conversation content",
+  );
 });
 
 await check("settings", async () => {
@@ -75,9 +134,43 @@ await check("workspace", async () => {
 });
 
 await check("session thinking", async () => {
-  await call("sessions.set_thinking", { id: "smoke-one", cwd: "", thinking: "high" });
+  await call("sessions.set_thinking", { id: "smoke-one", cwd: "", thinking: "low" });
   const loaded = await call("sessions.load", { id: "smoke-one", cwd: "" });
-  assert.equal(loaded.thinking, "high", "thinking should be stored on the session");
+  assert.equal(loaded.thinking, "low", "an explicit low level should be stored, not fall back to off");
+});
+
+await check("git", async () => {
+  const repo = join(home, "git-repo");
+  const worktree = join(home, "git-worktree");
+  mkdirSync(repo);
+  const run = (...args: string[]): void => {
+    const result = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  run("init", "-b", "main");
+  run("config", "user.email", "maota@example.invalid");
+  run("config", "user.name", "MaoTa");
+  run("config", "commit.gpgsign", "false");
+  writeFileSync(join(repo, "README.md"), "initial\n");
+  run("add", "README.md");
+  run("commit", "-m", "initial");
+  run("branch", "topic");
+
+  const status = await call("git.status", { cwd: repo });
+  assert.equal(status.is_repo, true);
+  assert.equal(status.branch, "main");
+  assert.deepEqual(status.branches, ["main", "topic"]);
+  const switched = await call("git.switch_branch", { cwd: repo, branch: "topic" });
+  assert.equal(switched.branch, "topic");
+  await call("git.switch_branch", { cwd: repo, branch: "main" });
+  const created = await call("git.create_worktree", {
+    cwd: repo,
+    branch: "maota/web-smoke",
+    path: worktree,
+    base: "main",
+  });
+  assert.equal(created.path, worktree);
+  assert.equal(created.status.branch, "maota/web-smoke");
 });
 
 await check("ui", async () => {
@@ -148,6 +241,11 @@ await check("streaming turn", async () => {
     1,
     "the session should record the one skill catalog it was sent",
   );
+  const answered = loaded.messages.find((message: { role?: string; content?: string }) =>
+    message.role === "assistant" && message.content === SHORT
+  );
+  assert.equal(answered?.reasoning, "check the request", "the completed turn should keep its reasoning trace");
+  assert.equal(answered?.steps, 1, "the completed turn should keep its step count");
   assert.equal(loaded.dangling, false, "a finished turn is not dangling");
 });
 
@@ -262,6 +360,7 @@ await check("approval: a risky command waits, and allowing it runs it", async ()
   await waitFor((event) => event.event === "turn.done" && event.turn_id === id);
   const result = resultOf(id);
   assert.equal(result?.ok, true, `the allowed command should have run, got ${JSON.stringify(result)}`);
+  assert.equal(result?.id, "call_4", "a streamed tool result should keep its call id");
   assert.ok(JSON.stringify(result?.output).includes("rm file"), "the command's own output should come back");
 
   const audit = join(auditDir, "smoke-approval.json");

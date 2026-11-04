@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+import { ICON, MaoIcon as Icon } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
 import { call, type SkillSummary } from "../lib/rpc.ts";
-import { Icon, ICON } from "./Icon.tsx";
 import { Popover } from "./Popover.tsx";
 
 /// The menu inserts a reference, not the instructions: the model still loads

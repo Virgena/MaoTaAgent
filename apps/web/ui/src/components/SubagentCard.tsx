@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
+import type { LiveSubagent, SubagentStatus } from "../execution.ts";
 import { useT, type MessageKey } from "../lib/i18n.ts";
 import { call, type SessionFile, type SessionSummary } from "../lib/rpc.ts";
-import type { LiveSubagent, SubagentStatus } from "./MessageList.tsx";
 import { MessageItem } from "./MessageItem.tsx";
 
 const STATUS: Record<SubagentStatus, MessageKey> = {

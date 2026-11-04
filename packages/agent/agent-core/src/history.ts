@@ -63,7 +63,18 @@ export async function loadHistory(ctx: Call, sessionId: string, cwd: string | nu
     { id: sessionId, cwd: cwd ?? "" },
     { signal: ctx.signal },
   )) as { messages?: Message[] };
-  return Array.isArray(reply?.messages) ? reply.messages : [];
+  return Array.isArray(reply?.messages) ? reply.messages.map(modelMessage) : [];
+}
+
+function modelMessage(message: Message): Message {
+  return {
+    role: message.role,
+    ...(message.content === undefined ? {} : { content: message.content }),
+    ...(message.tool_calls === undefined ? {} : { tool_calls: message.tool_calls }),
+    ...(message.tool_call_id === undefined ? {} : { tool_call_id: message.tool_call_id }),
+    ...(message.name === undefined ? {} : { name: message.name }),
+    ...(message.source === undefined ? {} : { source: message.source }),
+  };
 }
 
 function previewOf(content: string, artifact: ArtifactRef): string {
@@ -433,7 +444,19 @@ export async function persist(
   parent: SubagentOrigin | null,
   route: ModelRoute | null,
   thinking: string,
+  trace?: PersistTrace,
 ): Promise<void> {
+  const lastAssistant = messages.findLastIndex((item) => item.role === "assistant");
+  const traced = trace === undefined || lastAssistant <= trace.after ? messages : messages.map((message, index) =>
+    index === lastAssistant
+      ? {
+          ...message,
+          ...(trace.reasoning === "" ? {} : { reasoning: trace.reasoning }),
+          ...(trace.reasoning_ms === 0 ? {} : { reasoning_ms: trace.reasoning_ms }),
+          ...(trace.steps === 0 ? {} : { steps: trace.steps }),
+        }
+      : message
+  );
   await ctx.channel.call(
     "session",
     "save",
@@ -441,7 +464,7 @@ export async function persist(
       id: sessionId,
       cwd: cwd ?? "",
       title,
-      messages,
+      messages: traced,
       model_route: route,
       thinking,
       ...(parent === null
@@ -458,5 +481,12 @@ export async function persist(
     },
     { signal: ctx.signal },
   );
+}
+
+export interface PersistTrace {
+  reasoning: string;
+  reasoning_ms: number;
+  steps: number;
+  after: number;
 }
 

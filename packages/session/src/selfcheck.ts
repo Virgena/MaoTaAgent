@@ -213,7 +213,7 @@ export async function runSelfCheck(): Promise<string[]> {
 
     const folder = join(root, encodeDir("E:\\proj"));
     const planPath = join(folder, "old.json");
-    for (const version of [1, 2, 3]) {
+    for (const version of [1, 2, 3, 4, 5, 6]) {
       writeFileSync(
         planPath,
         JSON.stringify({

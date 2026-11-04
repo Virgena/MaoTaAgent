@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { MaoButton, MaoSelect, MaoTextField } from "maotaui";
+import { ICON, MaoButton, MaoIcon as Icon, MaoSelect, MaoTextField } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
 import { call, type AdapterView, type ModelCatalogView, type ModelProviderView, type ModelView } from "../lib/rpc.ts";
 import { describe } from "../lib/errors.ts";
-import { Icon, ICON } from "./Icon.tsx";
 import { Popover } from "./Popover.tsx";
 
 interface ProviderDraft {
@@ -78,8 +77,17 @@ function tokenText(value: number | undefined): string {
   return value < 1000 ? `${value} tokens` : `${Math.round(value / 1000)}K tokens`;
 }
 
-export function ModelsSettings({ catalog, onChanged }: { catalog: ModelCatalogView | null; onChanged: (catalog: ModelCatalogView) => void }) {
+export function ModelsSettings({
+  catalog,
+  onChanged,
+  onEditingChange,
+}: {
+  catalog: ModelCatalogView | null;
+  onChanged: (catalog: ModelCatalogView) => void;
+  onEditingChange?: (editing: boolean) => void;
+}) {
   const t = useT();
+  const editorDialog = useRef<HTMLDivElement | null>(null);
   const [editor, setEditor] = useState<Editor>(null);
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
@@ -90,15 +98,36 @@ export function ModelsSettings({ catalog, onChanged }: { catalog: ModelCatalogVi
   const [menu, setMenu] = useState<string | null>(null);
   const adapters = catalog?.adapters ?? [];
   const configurableProviders = catalog?.providers ?? [];
+  const editorOpen = editor !== null;
 
   useEffect(() => {
-    if (editor === null) return;
+    if (!editorOpen) return;
     const close = (event: KeyboardEvent): void => {
       if (event.key === "Escape") setEditor(null);
     };
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
-  }, [editor]);
+  }, [editorOpen]);
+
+  useEffect(() => {
+    onEditingChange?.(editorOpen);
+  }, [editorOpen, onEditingChange]);
+
+  useEffect(() => () => onEditingChange?.(false), [onEditingChange]);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => {
+      editorDialog.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.requestAnimationFrame(() => {
+        if (previous !== null && previous.isConnected) previous.focus();
+      });
+    };
+  }, [editorOpen]);
 
   const run = async <T,>(work: () => Promise<T>): Promise<T | undefined> => {
     setBusy(true);
@@ -255,7 +284,7 @@ export function ModelsSettings({ catalog, onChanged }: { catalog: ModelCatalogVi
     <div className={`models-settings${editor === null ? "" : " is-editing"}`}>
       {editor === null ? null : (
         <div className="model-editor-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setEditor(null); }}>
-          <div className="model-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="model-editor-title">
+          <div ref={editorDialog} className="model-editor-dialog" role="dialog" aria-modal="true" aria-labelledby="model-editor-title">
             {editor.kind === "provider" ? (
               <form className="model-editor" onSubmit={(event) => { event.preventDefault(); void saveProvider(); }}>
                 <div className="model-editor-title" id="model-editor-title">{editor.draft.id === "" ? t("addProvider") : t("editProvider")}</div>

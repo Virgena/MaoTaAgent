@@ -1,43 +1,18 @@
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 
-import { useT } from "../lib/i18n.ts";
+import {
+  transcriptBlocks,
+  type LiveSubagent,
+  type LiveTool,
+  type LiveTurn,
+  type SubagentStatus,
+} from "../execution.ts";
 import type { Approval, HostEvent, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { ApprovalCard } from "./ApprovalCard.tsx";
-import { Markdown, MessageItem, ToolRow } from "./MessageItem.tsx";
-import { SubagentCard } from "./SubagentCard.tsx";
+import { ExecutionTrace } from "./ExecutionTrace.tsx";
+import { Markdown, MessageItem } from "./MessageItem.tsx";
 
-export interface LiveTool {
-  tool: string;
-  id?: string;
-  args?: unknown;
-  ok?: boolean;
-  output?: unknown;
-}
-
-export type SubagentStatus = "running" | "done" | "partial" | "failed";
-
-export interface LiveSubagent {
-  id: string;
-  call_id: string;
-  type: string;
-  description: string;
-  status: SubagentStatus;
-  steps: number;
-  tools: LiveTool[];
-}
-
-export interface LiveTurn {
-  turn_id: string;
-  text: string;
-  reasoning: string;
-  step: number;
-  /// How much had been streamed when the current attempt began, so an attempt
-  /// that gets replaced can be cut back to where it started.
-  mark: { text: number; reasoning: number };
-  tools: LiveTool[];
-  subagents: LiveSubagent[];
-  running: boolean;
-}
+export type { LiveSubagent, LiveTool, LiveTurn } from "../execution.ts";
 
 function statusOf(event: HostEvent): SubagentStatus {
   if (event.ok === true) return "done";
@@ -53,13 +28,23 @@ export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
   switch (event.event) {
     case "text":
       return { ...turn, text: turn.text + (event.text ?? "") };
-    case "reasoning":
-      return { ...turn, reasoning: turn.reasoning + (event.text ?? "") };
+    case "reasoning": {
+      const now = Date.now();
+      return {
+        ...turn,
+        reasoning: turn.reasoning + (event.text ?? ""),
+        reasoningStartedAt: turn.reasoningStartedAt ?? now,
+      };
+    }
     case "step":
       return {
         ...turn,
         step: event.step ?? turn.step,
         mark: { text: turn.text.length, reasoning: turn.reasoning.length },
+        reasoningMs: turn.reasoningMs + (
+          turn.reasoningStartedAt === undefined ? 0 : Math.max(0, Date.now() - turn.reasoningStartedAt)
+        ),
+        reasoningStartedAt: undefined,
       };
     case "retract":
       // One question never shows two answers: what the replaced attempt had
@@ -70,7 +55,22 @@ export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
         reasoning: turn.reasoning.slice(0, turn.mark.reasoning),
       };
     case "tool_call":
-      return { ...turn, tools: [...turn.tools, { tool: event.tool ?? "", id: event.id, args: event.args }] };
+      return {
+        ...turn,
+        tools: [
+          ...turn.tools,
+          {
+            tool: event.tool ?? "",
+            id: event.id ?? "",
+            args: event.args,
+            startedAt: Date.now(),
+          },
+        ],
+        reasoningMs: turn.reasoningMs + (
+          turn.reasoningStartedAt === undefined ? 0 : Math.max(0, Date.now() - turn.reasoningStartedAt)
+        ),
+        reasoningStartedAt: undefined,
+      };
     case "tool_result":
       return { ...turn, tools: fillResult(turn.tools, event) };
     case "subagent.started":
@@ -97,7 +97,17 @@ export function applyEvent(turn: LiveTurn, event: HostEvent): LiveTurn {
         subagents: turn.subagents.map((subagent) =>
           subagent.id !== (event.subagent_id ?? "")
             ? subagent
-            : { ...subagent, tools: [...subagent.tools, { tool: event.tool ?? "", id: event.id, args: event.args }] },
+            : {
+                ...subagent,
+                tools: [
+                  ...subagent.tools,
+                  {
+                    tool: event.tool ?? "",
+                    id: event.id ?? `subagent-${subagent.id}-${subagent.tools.length}`,
+                    args: event.args,
+                  },
+                ],
+              },
         ),
       };
     case "subagent.tool_result":
@@ -129,7 +139,11 @@ function fillResult(tools: LiveTool[], event: HostEvent): LiveTool[] {
     ? tools.findIndex((tool) => tool.id === id)
     : tools.findIndex((tool) => tool.tool === (event.tool ?? "") && tool.ok === undefined);
   const index = at < 0 ? tools.length - 1 : at;
-  return tools.map((tool, here) => (here === index ? { ...tool, ok: event.ok, output: event.output } : tool));
+  return tools.map((tool, here) => (
+    here === index
+      ? { ...tool, ok: event.ok, output: event.output, endedAt: Date.now() }
+      : tool
+  ));
 }
 
 export function MessageList({
@@ -149,17 +163,11 @@ export function MessageList({
   cwd: string;
   onAnswer: (id: string, decision: "allow" | "deny") => void;
 }) {
-  const t = useT();
   const box = useRef<HTMLDivElement | null>(null);
   const stick = useRef(true);
+  const blocks = useMemo(() => transcriptBlocks(messages), [messages]);
 
-  const byCall = new Map<string, Approval[]>();
-  for (const approval of approvals) {
-    if (approval.call_id === undefined) continue;
-    byCall.set(approval.call_id, [...(byCall.get(approval.call_id) ?? []), approval]);
-  }
-  const placed = new Set([...byCall.values()].flat().map((approval) => approval.id));
-  const loose = approvals.filter((approval) => !placed.has(approval.id));
+  const loose = approvals.filter((approval) => approval.call_id === undefined || approval.call_id === "");
 
   useEffect(() => {
     const element = box.current;
@@ -176,39 +184,61 @@ export function MessageList({
       }}
     >
       <div className="messages-column">
-        {messages.map((message, index) => (
-          <MessageItem key={index} message={message} spawned={spawned} />
-        ))}
+        {blocks.map((block) => {
+          if (block.kind === "message") {
+            return <MessageItem key={block.key} message={block.message} spawned={spawned} />;
+          }
+          if (block.kind === "assistant") {
+            return (
+              <div key={block.key} className="msg msg-assistant">
+                <Markdown text={block.text} />
+              </div>
+            );
+          }
+          return (
+            <Fragment key={block.key}>
+              <ExecutionTrace
+                tools={block.tools}
+                running={false}
+                step={block.steps || undefined}
+                reasoning={block.reasoning === "" ? undefined : block.reasoning}
+                reasoningMs={block.reasoningMs}
+                approvals={approvals.filter((approval) => block.tools.some((tool) => tool.id === approval.call_id))}
+                spawned={spawned}
+                cwd={cwd}
+                onAnswer={onAnswer}
+              />
+              {block.text === "" ? null : (
+                <div className="msg msg-assistant">
+                  <Markdown text={block.text} />
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
         {pending === null ? null : <MessageItem message={{ role: "user", content: pending }} />}
         {live === null ? null : (
-          <div className="msg msg-assistant">
-            {live.reasoning === "" ? null : (
-              <details className="thinking-block" open={live.running}>
-                <summary>{t("thinkingText")}</summary>
-                <pre className="thinking-text">{live.reasoning}</pre>
-              </details>
-            )}
-            {live.tools.map((tool, index) => (
-              <Fragment key={index}>
-                <ToolRow tool={tool.tool} args={tool.args} ok={tool.ok} output={tool.output} />
-                {live.subagents
-                  .filter((subagent) => subagent.call_id !== "" && subagent.call_id === tool.id)
-                  .map((subagent) => (
-                    <SubagentCard key={subagent.id} subagent={subagent} cwd={cwd} />
-                  ))}
-                {(tool.id === undefined ? [] : (byCall.get(tool.id) ?? [])).map((approval) => (
-                  <ApprovalCard key={approval.id} approval={approval} onAnswer={onAnswer} />
-                ))}
-              </Fragment>
-            ))}
-            <Markdown text={live.text} />
-            {live.running ? (
-              <div className="status">
-                {t("step", { n: live.step })}
-                {live.text === "" ? t("waiting") : ""}
+          <>
+            <ExecutionTrace
+              tools={live.tools}
+              running={live.running}
+              step={live.step}
+              startedAt={live.startedAt}
+              reasoning={live.reasoning === "" ? undefined : live.reasoning}
+              reasoningMs={live.reasoningMs}
+              reasoningStartedAt={live.reasoningStartedAt}
+              approvals={approvals}
+              subagents={live.subagents}
+              spawned={spawned}
+              cwd={cwd}
+              onAnswer={onAnswer}
+            />
+            {live.text === "" ? null : (
+              <div className="msg msg-assistant">
+                <Markdown text={live.text} />
               </div>
-            ) : null}
-          </div>
+            )}
+          </>
         )}
         {loose.length === 0 ? null : (
           <div className="msg msg-assistant">

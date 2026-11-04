@@ -32,6 +32,7 @@ import { active, depths, readLevel, resolveLevel, settings, type LevelSetting } 
 import { approvalMode, assemblePrompt, catalogNote, classifyTool, listTools } from "./prompt.ts";
 import { readDepth, readNames, readOrigin, readSteps, readSystem, runFork, type SubagentRef } from "./subagent.ts";
 import { injectHostArgs, stripHostArgs, type HostValues } from "./tools.ts";
+import { createRunTrace, relaySubagentEvent } from "./trace.ts";
 
 /// A bus event is a broadcast a subscriber may not be there to hear, and a lost
 /// one costs nothing: the run itself is the record.
@@ -276,6 +277,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
     { role: "system", content: await assemblePrompt(ctx, identity, cwd, mode, system) },
     ...history,
   ];
+  const trace = createRunTrace(history.length - 1);
   flush();
 
   const starting = subagentPayload();
@@ -411,17 +413,8 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
         ctx.signal,
         (event: LoopEvent) => {
           stream.push(event);
-          if (event.type === "step") announceSub("agent.subagent.step", { step: event.step });
-          else if (event.type === "tool_call") {
-            announceSub("agent.subagent.tool_call", { id: event.id, tool: event.tool, args: event.args });
-          } else if (event.type === "tool_result") {
-            announceSub("agent.subagent.tool_result", {
-              id: event.id,
-              tool: event.tool,
-              ok: event.ok,
-              output: event.output,
-            });
-          }
+          trace.record(event);
+          relaySubagentEvent(event, announceSub);
         },
       );
     } catch (error) {
@@ -438,7 +431,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
         text: cancelled ? "this turn was cancelled" : `this turn ended against an unexpected failure: ${detail}`,
       });
       flush();
-      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level);
+      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level, trace.value(ending.steps));
       stream.push({ type: "done", steps: ending.steps, text: cancelled ? "" : detail, reason });
     }
     if (outcome !== null) {
@@ -458,7 +451,7 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
       const stopping = subagentPayload();
       if (stopping !== null) await record("SubagentStop", stopping);
       flush();
-      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level);
+      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level, trace.value());
       announceSub("agent.subagent.finished", {
         steps: outcome.steps,
         reason: outcome.reason,
@@ -482,7 +475,9 @@ export async function runAgent(params: any, ctx: Call): Promise<void> {
     flush();
     // What the last two points said belongs to the turn like everything else,
     // or a hook that only speaks at the end is never heard at all.
-    if (messages.length > before) await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level);
+    if (messages.length > before) {
+      await persist(ctx, sessionId, cwd, messages.slice(1), title, origin, runRoute, level, trace.value());
+    }
     if (!sub) active.delete(sessionId);
     depths.delete(sessionId);
     // A hook a tool brought belongs to the run that tool ran in, so it is

@@ -13,6 +13,7 @@ import { hostValue, injectHostArgs, stripHostArgs, type HostValues } from "./too
 import { createRig } from "./selfcheck-rig.ts";
 import { checkAgentRuns } from "./selfcheck-agent.ts";
 import { checkLoopRuns } from "./selfcheck-loop.ts";
+import { createRunTrace } from "./trace.ts";
 
 export async function runSelfCheck(definition: Definition): Promise<string[]> {
   const problems: string[] = [];
@@ -71,6 +72,17 @@ async function checkPrimitives(problems: string[]): Promise<void> {
   const family = titleOf("👨‍👩‍👧‍👦".repeat(40));
   if ([...segmenter.segment(family)].length > 31) problems.push("titleOf split a grapheme cluster");
   if (!family.endsWith("…")) problems.push("titleOf did not cut the long family line");
+
+  const trace = createRunTrace();
+  trace.record({ type: "step", step: 1 });
+  trace.record({ type: "reasoning", text: "discarded" });
+  trace.record({ type: "retract", reason: "retry" });
+  trace.record({ type: "reasoning", text: "kept" });
+  trace.record({ type: "tool_call", id: "c1", tool: "read", args: {} });
+  trace.record({ type: "done", steps: 2, text: "ok", reason: "completed" });
+  const captured = trace.value();
+  if (captured.reasoning !== "kept") problems.push(`the trace kept ${JSON.stringify(captured.reasoning)}`);
+  if (captured.steps !== 2) problems.push(`the trace reported ${captured.steps} steps`);
 
   const host: HostValues = {
     session_cwd: "E:\\proj",

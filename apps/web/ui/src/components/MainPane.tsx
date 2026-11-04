@@ -15,6 +15,7 @@ export function MainPane({
   info,
   kernelError,
   project,
+  projects,
   sessions,
   archived,
   names,
@@ -36,6 +37,8 @@ export function MainPane({
   onPickProject,
   onOpen,
   onRetry,
+  onOpenModels,
+  onOpenWorktree,
   onThinking,
   onModelRoute,
   onPermission,
@@ -43,10 +46,11 @@ export function MainPane({
   onSend,
   onCancel,
 }: {
-  page: "chat" | "settings" | "plugins" | "tasks";
+  page: "chat" | "plugins" | "tasks";
   info: AppInfo | null;
   kernelError: string | null;
   project: string;
+  projects: string[];
   sessions: SessionSummary[];
   archived: string[];
   names: Record<string, string>;
@@ -68,6 +72,8 @@ export function MainPane({
   onPickProject: () => void;
   onOpen: (session: SessionSummary) => void;
   onRetry: () => void;
+  onOpenModels: () => void;
+  onOpenWorktree: (path: string) => Promise<void>;
   onThinking: (value: string) => void;
   onModelRoute: (route: ModelRoute | null) => void;
   onPermission: (mode: string) => void;
@@ -96,6 +102,8 @@ export function MainPane({
           live={active === null ? null : (lives[active.id] ?? null)}
           failure={failure !== null && active !== null && failure.session === active.id ? failure.text : null}
           hasKey={info?.has_key ?? null}
+          projects={projects}
+          names={names}
           thinking={thinking}
           modelRoute={modelRoute}
           permission={permission}
@@ -104,6 +112,10 @@ export function MainPane({
           onCompact={onCompact}
           spawned={spawned}
           onRetry={onRetry}
+          onNew={onNew}
+          onPickProject={onPickProject}
+          onOpenModels={onOpenModels}
+          onOpenWorktree={onOpenWorktree}
           onThinking={onThinking}
           onModelRoute={onModelRoute}
           onPermission={onPermission}

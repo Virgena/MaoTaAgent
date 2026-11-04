@@ -40,6 +40,7 @@
     "@maota/tools": "workspace:*",
     "@maota/session": "workspace:*",
     "@maota/workspace": "workspace:*",
+    "@maota/git": "workspace:*",
     "@maota/system-prompt": "workspace:*",
     "@maota/context-agent-instructions": "workspace:*",
     "@maota/memory": "workspace:*",

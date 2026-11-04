@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { MaoBadge, MaoTextField } from "maotaui";
+import { useState, type ReactNode } from "react";
+import { ICON, MaoBadge, MaoIcon as Icon, MaoTextField, type IconName } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
 import type { SessionSummary } from "../lib/rpc.ts";
-import { Icon, ICON } from "./Icon.tsx";
+import { useSidebarSections } from "../useSidebarSections.ts";
 import { Popover } from "./Popover.tsx";
 
 export const DEFAULT_PROJECT = "";
@@ -17,6 +17,7 @@ export function projectLabel(cwd: string, fallback = "", name = ""): string {
 
 export interface ProjectGroup {
   cwd: string;
+  registered: boolean;
   sessions: SessionSummary[];
 }
 
@@ -70,8 +71,7 @@ function SessionRow({
 
 export function Sidebar({
   groups,
-  ungrouped,
-  recent,
+  chats,
   pinned,
   archived,
   names,
@@ -80,8 +80,6 @@ export function Sidebar({
   onNew,
   onProject,
   onAddProject,
-  onPickProject,
-  picking,
   manual,
   onManual,
   onOpen,
@@ -95,8 +93,7 @@ export function Sidebar({
   onSearch,
 }: {
   groups: ProjectGroup[];
-  ungrouped: SessionSummary[];
-  recent: SessionSummary[];
+  chats: SessionSummary[];
   pinned: SessionSummary[];
   archived: SessionSummary[];
   names: Record<string, string>;
@@ -105,8 +102,6 @@ export function Sidebar({
   onNew: (cwd: string) => void;
   onProject: (cwd: string) => void;
   onAddProject: (cwd: string) => void;
-  onPickProject: () => void;
-  picking: boolean;
   manual: boolean;
   onManual: (open: boolean) => void;
   onOpen: (session: SessionSummary) => void;
@@ -124,10 +119,7 @@ export function Sidebar({
   const [menu, setMenu] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [collapsed, setCollapsed] = useState<string[]>([]);
-  const [projectsOpen, setProjectsOpen] = useState(true);
-  const [recentOpen, setRecentOpen] = useState(true);
-  const pinnedIds = new Set(pinned.map((session) => session.id));
+  const { sections, toggleSection, toggleProject: toggleProjectState } = useSidebarSections();
 
   const commit = (cwd: string): void => {
     onRename(cwd, draft.trim());
@@ -137,7 +129,7 @@ export function Sidebar({
 
   const toggleProject = (cwd: string): void => {
     onProject(cwd);
-    setCollapsed((was) => (was.includes(cwd) ? was.filter((item) => item !== cwd) : [...was, cwd]));
+    toggleProjectState(cwd);
   };
 
   const row = (session: SessionSummary, isPinned: boolean, isArchived: boolean) => (
@@ -152,6 +144,33 @@ export function Sidebar({
       onPin={() => onPin(session.id)}
       onArchive={() => onArchive(session.id)}
     />
+  );
+
+  const folder = (
+    key: string,
+    label: string,
+    icon: IconName,
+    open: boolean,
+    toggle: () => void,
+    children: ReactNode,
+    actions?: ReactNode,
+  ) => (
+    <div key={key} className="side-folder">
+      <div className="side-item side-folder-row">
+        <button
+          type="button"
+          className="side-open side-folder-toggle"
+          title={label}
+          aria-expanded={open}
+          onClick={toggle}
+        >
+          <Icon name={icon} className="icon side-folder-icon" />
+          <span className="side-name">{label}</span>
+        </button>
+        {actions === undefined ? null : <span className="side-acts">{actions}</span>}
+      </div>
+      {open ? <div className="side-children">{children}</div> : null}
+    </div>
   );
 
   return (
@@ -179,209 +198,165 @@ export function Sidebar({
       </nav>
 
       <div className="side-body">
-        {pinned.length === 0 ? null : (
-          <div className="side-block">
-            <div className="side-head">{t("pinned")}</div>
-            {pinned.map((session) => row(session, true, false))}
-          </div>
+        {pinned.length === 0
+          ? null
+          : folder(
+              "pinned",
+              t("pinned"),
+              ICON.pin,
+              sections.pinned,
+              () => toggleSection("pinned"),
+              pinned.map((session) => row(session, true, false)),
+            )}
+
+        {folder(
+          "chats",
+          t("chats"),
+          ICON.chat,
+          sections.chats,
+          () => toggleSection("chats"),
+          chats.length === 0
+            ? <div className="side-empty">{t("noRecent")}</div>
+            : chats.map((session) => row(session, false, false)),
+          <button
+            type="button"
+            className="side-icon"
+            title={t("newChat")}
+            aria-label={t("newChat")}
+            onClick={() => onNew(DEFAULT_PROJECT)}
+          >
+            <Icon name={ICON.plus} />
+          </button>,
         )}
 
-        {ungrouped.length === 0 ? null : (
-          <div className="side-block">
-            <div className="side-head">{t("ungrouped")}</div>
-            {ungrouped.map((session) => row(session, pinnedIds.has(session.id), false))}
-          </div>
-        )}
-
-        <div className="side-block">
-          <div className="side-head">
-            <span className="side-head-title">{t("workspaces")}</span>
-            <span className="side-head-actions">
-              <button
-                type="button"
-                className="side-icon"
-                title={projectsOpen ? t("collapse") : t("expand")}
-                aria-label={projectsOpen ? t("collapse") : t("expand")}
-                aria-expanded={projectsOpen}
-                onClick={() => setProjectsOpen((was) => !was)}
-              >
-                <Icon name={projectsOpen ? ICON.chevronDown : ICON.chevronRight} />
-              </button>
-              <button
-                type="button"
-                className="side-icon"
-                title={t("addProject")}
-                aria-label={t("addProject")}
-                disabled={picking}
-                aria-busy={picking || undefined}
-                onClick={onPickProject}
-              >
-                {picking ? <span className="mt-btn-spinner" /> : <Icon name={ICON.plus} />}
-              </button>
-            </span>
-          </div>
-          {projectsOpen ? (
+        {groups.map((group) => {
+          const open = !sections.projects.includes(group.cwd);
+          const label = projectLabel(group.cwd, t("defaultProject"), names[group.cwd] ?? "");
+          const actions = (
             <>
-              {groups.map((group) => {
-                const open = !collapsed.includes(group.cwd);
-                return (
-                  <div key={group.cwd} className="side-project-group">
-                    <div className="side-item side-project">
-                      {renaming === group.cwd ? (
-                        <MaoTextField
-                          autoFocus
-                          className="side-path"
-                          placeholder={projectLabel(group.cwd, t("defaultProject"))}
-                          value={draft}
-                          onChange={(event) => setDraft(event.target.value)}
-                          onBlur={() => commit(group.cwd)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") commit(group.cwd);
-                            if (event.key === "Escape") setRenaming(null);
-                          }}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="side-open"
-                          title={group.cwd}
-                          aria-expanded={open}
-                          onClick={() => toggleProject(group.cwd)}
-                        >
-                          <Icon name={open ? ICON.folderOpen : ICON.folder} className="icon side-project-folder" />
-                          <span className="side-name">{projectLabel(group.cwd, t("defaultProject"), names[group.cwd] ?? "")}</span>
-                        </button>
-                      )}
-                      <span className="side-acts">
-                        <button
-                          type="button"
-                          className="side-icon"
-                          title={t("newSession")}
-                          aria-label={t("newSession")}
-                          onClick={() => onNew(group.cwd)}
-                        >
-                          <Icon name={ICON.plus} />
-                        </button>
-                        <Popover
-                          className="side-more"
-                          title={t("more")}
-                          align="end"
-                          open={menu === group.cwd}
-                          onToggle={() => setMenu(menu === group.cwd ? null : group.cwd)}
-                          onClose={() => setMenu(null)}
-                          label={<Icon name={ICON.more} />}
-                        >
-                          <button
-                            type="button"
-                            className="option"
-                            onClick={() => {
-                              setMenu(null);
-                              setRenaming(group.cwd);
-                              setDraft(names[group.cwd] ?? "");
-                            }}
-                          >
-                            <span className="option-text">
-                              <span className="option-name">{t("rename")}</span>
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            className="option is-danger"
-                            onClick={() => {
-                              setMenu(null);
-                              onRemoveProject(group.cwd);
-                            }}
-                          >
-                            <span className="option-text">
-                              <span className="option-name">{t("removeProject")}</span>
-                            </span>
-                          </button>
-                        </Popover>
-                      </span>
-                    </div>
-                    {open ? (
-                      <div className="side-children">
-                        {group.sessions.map((session) => row(session, pinnedIds.has(session.id), false))}
-                        {group.sessions.length === 0 ? (
-                          <button type="button" className="side-item side-sub side-new" onClick={() => onNew(group.cwd)}>
-                            <Icon name={ICON.plus} className="icon icon-sm" />
-                            <span className="side-name">{t("newChat")}</span>
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })}
-
-              {manual ? (
-                <MaoTextField
-                  autoFocus
-                  className="side-path"
-                  placeholder={t("pathPlaceholder")}
-                  value={path}
-                  onChange={(event) => setPath(event.target.value)}
-                  onBlur={() => {
-                    setPath("");
-                    onManual(false);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      const value = path.trim();
-                      if (value !== "") onAddProject(value);
-                      setPath("");
-                      onManual(false);
-                    }
-                    if (event.key === "Escape") {
-                      setPath("");
-                      onManual(false);
-                    }
-                  }}
-                />
-              ) : null}
-            </>
-          ) : null}
-        </div>
-
-        <div className="side-block">
-          <div className="side-head">
-            <span className="side-head-title">{t("recent")}</span>
-            <span className="side-head-actions">
               <button
                 type="button"
                 className="side-icon"
-                title={recentOpen ? t("collapse") : t("expand")}
-                aria-label={recentOpen ? t("collapse") : t("expand")}
-                aria-expanded={recentOpen}
-                onClick={() => setRecentOpen((was) => !was)}
-              >
-                <Icon name={recentOpen ? ICON.chevronDown : ICON.chevronRight} />
-              </button>
-              <button
-                type="button"
-                className="side-icon"
-                title={t("newChat")}
-                aria-label={t("newChat")}
-                onClick={() => onNew(DEFAULT_PROJECT)}
+                title={t("newSession")}
+                aria-label={t("newSession")}
+                onClick={() => onNew(group.cwd)}
               >
                 <Icon name={ICON.plus} />
               </button>
-            </span>
-          </div>
-          {recentOpen ? (
-            recent.length === 0 ? (
-              <div className="side-empty">{t("noRecent")}</div>
-            ) : (
-              recent.map((session) => row(session, pinnedIds.has(session.id), false))
-            )
-          ) : null}
-        </div>
+              {group.registered ? (
+                <Popover
+                  className="side-more"
+                  title={t("more")}
+                  align="end"
+                  open={menu === group.cwd}
+                  onToggle={() => setMenu(menu === group.cwd ? null : group.cwd)}
+                  onClose={() => setMenu(null)}
+                  label={<Icon name={ICON.more} />}
+                >
+                  <button
+                    type="button"
+                    className="option"
+                    onClick={() => {
+                      setMenu(null);
+                      setRenaming(group.cwd);
+                      setDraft(names[group.cwd] ?? "");
+                    }}
+                  >
+                    <span className="option-text">
+                      <span className="option-name">{t("rename")}</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="option is-danger"
+                    onClick={() => {
+                      setMenu(null);
+                      onRemoveProject(group.cwd);
+                    }}
+                  >
+                    <span className="option-text">
+                      <span className="option-name">{t("removeProject")}</span>
+                    </span>
+                  </button>
+                </Popover>
+              ) : null}
+            </>
+          );
 
-        {archived.length === 0 ? null : (
-          <div className="side-block">
-            <div className="side-head">{t("archived")}</div>
-            {archived.map((session) => row(session, pinnedIds.has(session.id), true))}
-          </div>
+          if (renaming === group.cwd) {
+            return (
+              <div key={group.cwd} className="side-folder">
+                <div className="side-item side-folder-row is-editing">
+                  <MaoTextField
+                    autoFocus
+                    className="side-path"
+                    placeholder={label}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onBlur={() => commit(group.cwd)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") commit(group.cwd);
+                      if (event.key === "Escape") setRenaming(null);
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          }
+
+          return folder(
+            group.cwd,
+            label,
+            open ? ICON.folderOpen : ICON.folder,
+            open,
+            () => toggleProject(group.cwd),
+            group.sessions.length === 0
+              ? (
+                  <button type="button" className="side-item side-sub side-new" onClick={() => onNew(group.cwd)}>
+                    <Icon name={ICON.plus} className="icon icon-sm" />
+                    <span className="side-name">{t("newChat")}</span>
+                  </button>
+                )
+              : group.sessions.map((session) => row(session, false, false)),
+            actions,
+          );
+        })}
+
+        {manual ? (
+          <MaoTextField
+            autoFocus
+            className="side-path side-add-path"
+            placeholder={t("pathPlaceholder")}
+            value={path}
+            onChange={(event) => setPath(event.target.value)}
+            onBlur={() => {
+              setPath("");
+              onManual(false);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                const value = path.trim();
+                if (value !== "") onAddProject(value);
+                setPath("");
+                onManual(false);
+              }
+              if (event.key === "Escape") {
+                setPath("");
+                onManual(false);
+              }
+            }}
+          />
+        ) : null}
+
+        {folder(
+          "archived",
+          t("archived"),
+          ICON.archive,
+          sections.archived,
+          () => toggleSection("archived"),
+          archived.length === 0
+            ? <div className="side-empty">{t("noArchived")}</div>
+            : archived.map((session) => row(session, false, true)),
         )}
       </div>
 

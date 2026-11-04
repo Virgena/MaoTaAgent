@@ -4,6 +4,7 @@ import { MODEL_FAILURE, type AdapterChatRequest } from "@maota/model-protocol";
 
 interface Step {
   text?: string;
+  reasoning?: string;
   tool?: string;
   args?: unknown;
   fail?: { status?: number; body?: string; retry_after_ms?: number };
@@ -40,6 +41,9 @@ async function chat(_params: AdapterChatRequest, ctx: Parameters<NonNullable<Def
     return;
   }
   if (planned.fail !== undefined) throw failure(planned);
+  if (typeof planned.reasoning === "string" && planned.reasoning !== "") {
+    ctx.stream.push({ type: "reasoning", text: planned.reasoning });
+  }
   if (typeof planned.text === "string") {
     for (const piece of pieces(planned.text)) {
       ctx.stream.push({ type: "delta", text: piece });

@@ -93,6 +93,18 @@ try {
   const changed = setThinking(root, { id: "old", cwd: "E:\\proj", thinking: "medium" }, limits);
   assert.equal(changed.thinking, "medium", "setThinking should store the level");
   assert.equal(load(root, "old", "E:\\proj", limits).thinking, "medium", "setThinking should be durable");
+  save(root, {
+    id: "traced",
+    cwd: "E:\\proj",
+    messages: [
+      { role: "user", content: "inspect" },
+      { role: "assistant", content: "done", reasoning: "read first", reasoning_ms: 1250, steps: 2 },
+    ],
+  }, limits);
+  const traced = load(root, "traced", "E:\\proj", limits);
+  assert.equal(traced.messages[1]?.reasoning, "read first", "a session should keep read-only reasoning metadata");
+  assert.equal(traced.messages[1]?.reasoning_ms, 1250);
+  assert.equal(traced.messages[1]?.steps, 2);
 } finally {
   rmSync(root, { recursive: true, force: true });
 }

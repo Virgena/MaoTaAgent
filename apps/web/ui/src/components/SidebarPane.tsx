@@ -1,6 +1,6 @@
-/// The sidebar pane: the project tree and recent beside the chat. It folds
-/// sessions into their folders, keeps pinned and archived rows apart, and
-/// hands the sorted result to Sidebar.
+/// The sidebar pane: the flat project folders and conversations beside the
+/// chat. It keeps pinned and archived rows in their own folders and hands the
+/// sorted result to Sidebar.
 
 import { useMemo } from "react";
 
@@ -19,8 +19,6 @@ export function SidebarPane({
   onNew,
   onProject,
   onAddProject,
-  onPickProject,
-  picking,
   manual,
   onManual,
   onOpen,
@@ -44,8 +42,6 @@ export function SidebarPane({
   onNew: (cwd: string) => void;
   onProject: (cwd: string) => void;
   onAddProject: (cwd: string) => void;
-  onPickProject: () => void;
-  picking: boolean;
   manual: boolean;
   onManual: (open: boolean) => void;
   onOpen: (session: SessionSummary) => void;
@@ -59,16 +55,19 @@ export function SidebarPane({
   onSearch: () => void;
 }) {
   const groups = useMemo(() => {
-    return [...new Set([project, ...projects])]
+    const registered = new Set(projects);
+    const paths = sessions.map((session) => session.cwd === "" ? DEFAULT_PROJECT : session.cwd);
+    return [...new Set([project, ...projects, ...paths])]
       .filter((cwd) => cwd !== DEFAULT_PROJECT)
       .map((cwd) => ({
         cwd,
+        registered: registered.has(cwd),
         sessions: sessions
           .filter((session) => (session.cwd === "" ? DEFAULT_PROJECT : session.cwd) === cwd)
           .filter((session) => !archived.includes(session.id))
+          .filter((session) => !pinned.includes(session.id))
           .sort(
             (left, right) =>
-              Number(pinned.includes(right.id)) - Number(pinned.includes(left.id)) ||
               right.updated_at.localeCompare(left.updated_at),
           ),
       }))
@@ -79,48 +78,39 @@ export function SidebarPane({
       });
   }, [archived, names, pinned, project, projects, sessions]);
 
-  const ungrouped = useMemo(() => {
-    const registered = new Set(projects);
-    return sessions
-      .filter((session) => {
-        const cwd = session.cwd === "" ? DEFAULT_PROJECT : session.cwd;
-        return cwd !== DEFAULT_PROJECT && !registered.has(cwd) && !archived.includes(session.id);
-      })
-      .sort(
-        (left, right) =>
-          Number(pinned.includes(right.id)) - Number(pinned.includes(left.id)) ||
-          right.updated_at.localeCompare(left.updated_at),
-      );
-  }, [archived, pinned, projects, sessions]);
-
-  const recent = useMemo(
+  const chats = useMemo(
     () =>
       sessions
         .filter((session) => (session.cwd === "" ? DEFAULT_PROJECT : session.cwd) === DEFAULT_PROJECT)
         .filter((session) => !archived.includes(session.id))
+        .filter((session) => !pinned.includes(session.id))
         .sort(
           (left, right) =>
-            Number(pinned.includes(right.id)) - Number(pinned.includes(left.id)) ||
             right.updated_at.localeCompare(left.updated_at),
         ),
     [archived, pinned, sessions],
   );
 
   const pinnedRows = useMemo(
-    () => sessions.filter((session) => pinned.includes(session.id) && !archived.includes(session.id)),
+    () =>
+      sessions
+        .filter((session) => pinned.includes(session.id) && !archived.includes(session.id))
+        .sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
     [archived, pinned, sessions],
   );
 
   const archivedRows = useMemo(
-    () => sessions.filter((session) => archived.includes(session.id)),
+    () =>
+      sessions
+        .filter((session) => archived.includes(session.id))
+        .sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
     [archived, sessions],
   );
 
   return (
     <Sidebar
       groups={groups}
-      ungrouped={ungrouped}
-      recent={recent}
+      chats={chats}
       pinned={pinnedRows}
       archived={archivedRows}
       names={names}
@@ -129,8 +119,6 @@ export function SidebarPane({
       onNew={onNew}
       onProject={onProject}
       onAddProject={onAddProject}
-      onPickProject={onPickProject}
-      picking={picking}
       manual={manual}
       onManual={onManual}
       onOpen={onOpen}

@@ -27,6 +27,7 @@ const PLUGINS: Array<[string, string]> = [
   ["model-openai", "packages/model/model-openai/src/index.ts"],
   ["settings", "packages/settings/settings/src/index.ts"],
   ["workspace", "packages/workspace/workspace/src/index.ts"],
+  ["git", "packages/git/git/src/index.ts"],
   ["pwsh-local", "packages/shell/pwsh-local/src/index.ts"],
   ["permission", "packages/interaction/permission/src/index.ts"],
   ["tool-pwsh", "packages/shell/tool-pwsh/src/index.ts"],
@@ -71,7 +72,7 @@ writeFileSync(
     "",
     "[plugins.model-scripted.config]",
     "script = [",
-    `  { text = '${SHORT}' },`,
+    `  { reasoning = 'check the request', text = '${SHORT}' },`,
     `  { text = '${LONG}' },`,
     "  { },",
     `  { text = 'first workdir turn' },`,
@@ -108,6 +109,7 @@ export interface Frame {
   code?: number;
   message?: string;
   request_id?: string;
+  id?: string;
   tool?: string;
   call_id?: string;
   subagent_id?: string;

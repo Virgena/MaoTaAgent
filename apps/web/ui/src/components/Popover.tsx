@@ -1,10 +1,11 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export function Popover({
   label,
   title,
   className,
   align = "start",
+  placement = "auto",
   open,
   disabled,
   onToggle,
@@ -15,6 +16,7 @@ export function Popover({
   title: string;
   className?: string;
   align?: "start" | "end";
+  placement?: "auto" | "up" | "down";
   open: boolean;
   disabled?: boolean;
   onToggle: () => void;
@@ -22,6 +24,10 @@ export function Popover({
   children: ReactNode;
 }) {
   const box = useRef<HTMLDivElement | null>(null);
+  const panel = useRef<HTMLDivElement | null>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const wasOpen = useRef(false);
+  const [opening, setOpening] = useState<"up" | "down">("up");
 
   useEffect(() => {
     if (!open) return;
@@ -39,9 +45,31 @@ export function Popover({
     };
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (!open || placement !== "auto") return;
+    const frame = window.requestAnimationFrame(() => {
+      const anchor = box.current?.getBoundingClientRect();
+      const height = panel.current?.getBoundingClientRect().height ?? 0;
+      if (anchor === undefined) return;
+      setOpening(window.innerHeight - anchor.bottom >= height + 8 ? "down" : "up");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [open, placement]);
+
+  useEffect(() => {
+    if (wasOpen.current && !open) {
+      const active = document.activeElement;
+      if (active === null || active === document.body || !active.isConnected) {
+        trigger.current?.focus();
+      }
+    }
+    wasOpen.current = open;
+  }, [open]);
+
   return (
     <div className={`popover-anchor ${className ?? ""}`.trim()} ref={box}>
       <button
+        ref={trigger}
         type="button"
         className="popover-trigger"
         title={title}
@@ -52,7 +80,14 @@ export function Popover({
       >
         {label}
       </button>
-      {open ? <div className={`popover-panel${align === "end" ? " is-end" : ""}`}>{children}</div> : null}
+      {open ? (
+        <div
+          ref={panel}
+          className={`popover-panel${align === "end" ? " is-end" : ""}${placement === "down" || opening === "down" ? " is-down" : ""}`}
+        >
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 }

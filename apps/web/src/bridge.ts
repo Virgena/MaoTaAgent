@@ -2,7 +2,17 @@ import { randomUUID } from "node:crypto";
 
 import { CallError, type Channel, type InboundStream } from "@maota/plugin-kit";
 
-import type { BridgeFacts, HostEvent, HostFailure, SessionFile, SettingsView, SubagentRef, WorkspaceView } from "./protocol.ts";
+import type {
+  BridgeFacts,
+  GitStatusView,
+  GitWorktreeView,
+  HostEvent,
+  HostFailure,
+  SessionFile,
+  SettingsView,
+  SubagentRef,
+  WorkspaceView,
+} from "./protocol.ts";
 
 interface LoopEvent {
   type?: string;
@@ -152,6 +162,7 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
         emit({
           event: "tool_result",
           turn_id: turnId,
+          id: String(event.id ?? ""),
           tool: String(event.tool ?? ""),
           ok: event.ok !== false,
           output: event.output,
@@ -342,6 +353,20 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
             archived: params.archived,
             expected_revision: params.expected_revision,
           });
+        case "git.status":
+          return await channel.call("git", "status", { cwd: cwdOf(params) }) as GitStatusView;
+        case "git.switch_branch":
+          return await channel.call("git", "switch_branch", {
+            cwd: cwdOf(params),
+            branch: params.branch,
+          }) as GitStatusView;
+        case "git.create_worktree":
+          return await channel.call("git", "create_worktree", {
+            cwd: cwdOf(params),
+            branch: params.branch,
+            path: params.path,
+            base: params.base,
+          }) as GitWorktreeView;
         case "skills.list":
           return await channel.call("skill", "list", { cwd: cwdOf(params) });
         case "settings.set_key":

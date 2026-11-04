@@ -1,8 +1,8 @@
 import { useState } from "react";
+import { ICON, MaoIcon as Icon } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
 import type { SessionSummary } from "../lib/rpc.ts";
-import { Icon, ICON } from "./Icon.tsx";
 import { projectLabel } from "./Sidebar.tsx";
 
 export function SearchPalette({

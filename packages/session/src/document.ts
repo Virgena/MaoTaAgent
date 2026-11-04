@@ -12,7 +12,7 @@ import { CallError } from "@maota/plugin-kit";
 import { eventsOf, type SessionEvent } from "./plan.ts";
 import { compactSourceOf, compactionsOf, type CompactionRecord, type CompactSource } from "./compaction.ts";
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 export const DEFAULT_DIRNAME = "default";
 
@@ -42,6 +42,9 @@ export interface SessionMessage {
   tool_call_id?: string;
   name?: string;
   source?: MessageSource;
+  reasoning?: string;
+  reasoning_ms?: number;
+  steps?: number;
 }
 
 /// The durable format is a whitelist: a field this build does not know is not
@@ -89,6 +92,13 @@ function projectMessage(raw: unknown, strict: boolean): SessionMessage | null {
   if (Array.isArray(input.tool_calls)) message.tool_calls = input.tool_calls;
   if (typeof input.tool_call_id === "string") message.tool_call_id = input.tool_call_id;
   if (typeof input.name === "string") message.name = input.name;
+  if (typeof input.reasoning === "string" && input.reasoning !== "") message.reasoning = input.reasoning;
+  if (typeof input.reasoning_ms === "number" && Number.isFinite(input.reasoning_ms) && input.reasoning_ms >= 0) {
+    message.reasoning_ms = Math.floor(input.reasoning_ms);
+  }
+  if (typeof input.steps === "number" && Number.isInteger(input.steps) && input.steps > 0) {
+    message.steps = input.steps;
+  }
   if (source !== null) message.source = source;
   return message;
 }
@@ -281,7 +291,7 @@ export function inspect(path: string): Read {
       return { state: "bad", reason: "the document has no id and messages" };
     }
     const version = parsed.schema_version;
-    if (version !== undefined && ![1, 2, 3, 4, 5, SCHEMA_VERSION].includes(version)) {
+    if (version !== undefined && ![1, 2, 3, 4, 5, 6, SCHEMA_VERSION].includes(version)) {
       return { state: "bad", reason: `schema_version ${JSON.stringify(version)} is not one this build reads` };
     }
     const events = eventsOf((parsed as { events?: unknown }).events);

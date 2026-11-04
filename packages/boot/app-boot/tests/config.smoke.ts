@@ -33,7 +33,7 @@ assert.throws(() => profileDir(home, "nope"), /unknown profile/, "an unknown pro
 
 const base = await resolveBundleRows(PROFILE_TEMPLATES["default"]!.bundles, appBootRoot, appBootRoot);
 assert.deepEqual(base.warnings, [], "the shipped base bundle loads cleanly");
-assert.equal(base.rows.length, 30);
+assert.equal(base.rows.length, 31);
 assert.equal(base.rows.find((row) => row.id === "hmr")?.disabled, true, "the development watcher ships off");
 for (const row of base.rows) {
   const manifest = JSON.parse(readFileSync(join(packageDir(row.bundle, appBootRoot), "package.json"), "utf8")) as {

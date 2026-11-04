@@ -95,6 +95,21 @@ export interface WorkspaceView {
   archived_sessions: string[];
 }
 
+export interface GitStatusView {
+  is_repo: boolean;
+  root: string | null;
+  branch: string | null;
+  detached: boolean;
+  dirty: boolean;
+  branches: string[];
+}
+
+export interface GitWorktreeView {
+  path: string;
+  branch: string;
+  status: GitStatusView;
+}
+
 export interface SessionSummary {
   id: string;
   cwd: string;
@@ -181,6 +196,9 @@ export interface SessionMessage {
   tool_call_id?: string;
   name?: string;
   source?: SessionMessageSource;
+  reasoning?: string;
+  reasoning_ms?: number;
+  steps?: number;
 }
 
 export interface SessionFile {

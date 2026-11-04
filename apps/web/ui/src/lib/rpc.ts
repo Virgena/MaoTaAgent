@@ -31,7 +31,7 @@ export function subscribe(onEvent: (event: HostEvent) => void, onReconnect: () =
     if (opened) onReconnect();
     opened = true;
   };
-  source.onmessage = (raw: MessageEvent<string>) => {
+  source.onmessage = (raw: MessageEvent) => {
     try {
       onEvent(JSON.parse(raw.data) as HostEvent);
     } catch {

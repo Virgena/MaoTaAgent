@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { ICON, MaoIcon as Icon, type IconName } from "maotaui";
 
 import { useT, type MessageKey } from "../lib/i18n.ts";
-import { Icon, ICON, type IconName } from "./Icon.tsx";
 import { Popover } from "./Popover.tsx";
 
 export const PERMISSION_OPTIONS: readonly {
@@ -21,11 +21,13 @@ export function PermissionPicker({
   onChange,
   disabled,
   note,
+  label,
 }: {
   value: string;
   onChange: (mode: string) => void;
   disabled?: boolean;
   note?: string;
+  label?: ReactNode;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -39,15 +41,27 @@ export function PermissionPicker({
       disabled={disabled}
       onToggle={() => setOpen((was) => !was)}
       onClose={() => setOpen(false)}
-      label={
+      label={label ?? (
         <>
           <Icon name={current.icon} className="icon icon-sm" />
           {t(current.name)}
+          <Icon name={ICON.chevronDown} className="icon icon-sm" />
         </>
-      }
+      )}
     >
-      <div className="popover-head">
-        <span>{t("permissionAsk")}</span>
+      <div className="permission-group-head">
+        <span className="permission-group-title">
+          <Icon name={ICON.chevronDown} className="icon icon-sm" />
+          {t("agentMode")}
+        </span>
+        <span>{t(current.name)}</span>
+      </div>
+      <div className="permission-group-head is-permissions">
+        <span className="permission-group-title">
+          <Icon name={ICON.chevronDown} className="icon icon-sm" />
+          {t("permissions")}
+        </span>
+        <span>{t(current.name)}</span>
       </div>
       {note === undefined ? null : <div className="popover-note">{note}</div>}
       {PERMISSION_OPTIONS.map((option) => (

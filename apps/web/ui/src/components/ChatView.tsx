@@ -1,9 +1,9 @@
-import { MaoButton } from "maotaui";
+import { ICON, MaoButton, MaoIcon as Icon } from "maotaui";
 
 import type { AppInfo, Approval, ContextView, ModelRoute, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
-import { Icon, ICON } from "./Icon.tsx";
+import { RunStatus } from "./ExecutionTrace.tsx";
 import { MessageList, type LiveTurn } from "./MessageList.tsx";
 
 export function ChatView({
@@ -15,6 +15,8 @@ export function ChatView({
   pending,
   live,
   failure,
+  projects,
+  names,
   thinking,
   modelRoute,
   permission,
@@ -23,6 +25,10 @@ export function ChatView({
   onCompact,
   spawned,
   onRetry,
+  onNew,
+  onPickProject,
+  onOpenModels,
+  onOpenWorktree,
   onThinking,
   onModelRoute,
   onPermission,
@@ -39,6 +45,8 @@ export function ChatView({
   live: LiveTurn | null;
   failure: string | null;
   hasKey: boolean | null;
+  projects: string[];
+  names: Record<string, string>;
   thinking: string;
   modelRoute: ModelRoute | null;
   permission: string;
@@ -47,6 +55,10 @@ export function ChatView({
   onCompact: () => void;
   spawned: Record<string, SessionSummary[]>;
   onRetry: () => void;
+  onNew: (cwd: string) => void;
+  onPickProject: () => void;
+  onOpenModels: () => void;
+  onOpenWorktree: (path: string) => Promise<void>;
   onThinking: (level: string) => void;
   onModelRoute: (route: ModelRoute | null) => void;
   onPermission: (mode: string) => void;
@@ -69,6 +81,13 @@ export function ChatView({
       running={live?.running === true}
       blocked={kernelError !== null}
       context={context}
+      inConversation={!idle}
+      projects={projects}
+      names={names}
+      onNew={onNew}
+      onPickProject={onPickProject}
+      onOpenModels={onOpenModels}
+      onOpenWorktree={onOpenWorktree}
       onThinking={onThinking}
       onModelRoute={onModelRoute}
       onPermission={onPermission}
@@ -83,6 +102,7 @@ export function ChatView({
       {session === null ? null : (
         <header className="chat-head">
           <span className="chat-title">{title}</span>
+          <RunStatus live={live} className="chat-run-status" />
         </header>
       )}
 
@@ -117,6 +137,7 @@ export function ChatView({
               <span>{failure}</span>
             </div>
           )}
+          <RunStatus live={live} className="composer-run-status" />
           {composer}
         </>
       )}

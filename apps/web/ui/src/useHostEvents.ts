@@ -75,11 +75,13 @@ export function useHostEvents({
           turn_id: turnId,
           text: "",
           reasoning: "",
+          reasoningMs: 0,
           step: 0,
           mark: { text: 0, reasoning: 0 },
           tools: [],
           subagents: [],
           running: true,
+          startedAt: Date.now(),
         },
       }));
       return;

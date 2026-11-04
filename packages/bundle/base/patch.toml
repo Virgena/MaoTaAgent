@@ -21,6 +21,7 @@ insert = [
   { id = "tools", name = "@maota/tools" },
   { id = "session", name = "@maota/session" },
   { id = "workspace", name = "@maota/workspace" },
+  { id = "git", name = "@maota/git" },
   { id = "system-prompt", name = "@maota/system-prompt" },
   { id = "context-agent-instructions", name = "@maota/context-agent-instructions" },
   { id = "memory", name = "@maota/memory" },
