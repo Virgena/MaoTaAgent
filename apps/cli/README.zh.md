@@ -77,11 +77,11 @@
 
 两个输入都在重启任何东西之前由 [`@maota/app-boot`](../../packages/boot/app-boot/README.zh.md) 定下：
 
-- 配置文件：`--config`，其次 `BLMOADLL_CONFIG`，其次存在的 `$MAOTA_HOME/profiles/<profile>/blmoadll.local.toml`，否则是同目录里生成的那份 `blmoadll.toml`；`MAOTA_HOME` 缺省 `~/.maota`。首次运行会写下 profile 清单，按该 profile 列出的组合包生成配置，并为每一行在 profile 自己的 `node_modules` 里建一条指向该包的链接，同时往 stderr 打一行 `MaoTa: wrote <path>`。显式给的 `--config` 从不写入；文件不在，内核还没起来就以 2 退出。
+- 配置文件：`--config`，其次 `BLMOADLL_CONFIG`，其次存在的 `$MAOTA_HOME/profiles/<profile>/blmoadll.local.toml`，否则是同目录里生成的那份 `blmoadll.toml`；`MAOTA_HOME` 缺省 `~/.maota`。首次运行会写下 profile 清单，按该 profile 列出的组合包生成配置，并为每一行在 profile 自己的 `node_modules` 里建一条指向该包的链接，同时往 stderr 打一行 `MaoTa: wrote <path>`。显式给的 `--config` 从不写入；文件不在，内核还没起来就以 2 退出。生成的文件还带一行 `[kernel.host]`，指向安装好的 `@maota/plugin-host` 入口：正是这一行让合规的 Node 插件共用一个进程，删掉它就是全部回退。
 - Profile：`--profile`，其次 `serve` 子命令用 `serve`，其余命令用 `default`。profile 是 `$MAOTA_HOME/profiles` 下的一个目录；它的 `package.json` 记着启动时读回的组合包列表，所以光在 home 目录里就能改插件集。
 - 内核二进制：`--kernel`，其次 `BLMOADLL_BIN`，其次安装好的 `@virgena/blmoadll` 二进制，最后隔壁 `blmoadll` 的 debug 产物。
 
-内核 stderr 上的日志行也走 stderr：`serve` 丢掉 `info` 行、留下的前缀是 `MaoTa`，其它模式前缀是 `[kernel]`。
+内核 stderr 上的日志行也走 stderr：`serve` 丢掉 `info` 行、留下的前缀是 `MaoTa`，其它模式前缀是 `[kernel]`。`serve` 唯一放行的 `info` 行是内核那句 `boot:`，因为只有它说清这次启动到底起了什么：`boot: 31 plugins, 1 host, 0 processes`。
 
 <a id="dev-hot-reload"></a>
 ## 开发期热重载

@@ -1,7 +1,7 @@
-import { realpathSync, writeSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { writeSync } from "node:fs";
 
 import { Channel, CallError, type Route } from "./channel.ts";
+import { canonicalPath, hostAdapter } from "./host.ts";
 
 /// The other half of this number is `PROTOCOL_VERSION` in the kernel's
 /// `crates/protocol`; a mismatch fails startup with -32015.
@@ -94,7 +94,7 @@ export class ProviderStream {
   }
 }
 
-export function serve(definition: Definition): void {
+export function serve(definition: Definition, moduleUrl: string | null = null): void {
   const wiring: Wiring = { channel: null as unknown as Channel, config: {}, capabilities: {} };
   const aborts = new Map<number, AbortController>();
   const registered: Registration[] = [];
@@ -110,7 +110,26 @@ export function serve(definition: Definition): void {
     event: () => {},
   });
   wiring.channel = channel;
-  channel.listen();
+  const adapter = hostAdapter();
+  if (adapter === null) channel.listen();
+  else adapter.adopt(definition, channel, moduleUrl);
+}
+
+/// The module that called into this package, from a stack trace. A shared host
+/// uses it to bind a plugin definition to the entry it is importing: a package
+/// that calls `runPlugin` from its top level gets pulled into another plugin's
+/// module graph, and it must not take that plugin's slot.
+function callerUrl(): string | null {
+  const stack = new Error().stack;
+  if (stack === undefined) return null;
+  for (const line of stack.split("\n").slice(1)) {
+    const at = line.indexOf("file://");
+    if (at < 0) continue;
+    const url = line.slice(at).replace(/:\d+:\d+\)?\s*$/, "").trim();
+    if (url.includes("/plugin-kit/")) continue;
+    return url;
+  }
+  return null;
 }
 
 export function unknownConfigKeys(known: readonly string[] | undefined, config: Record<string, unknown>): string[] {
@@ -174,7 +193,7 @@ async function handle(
       await unregisterAll(wiring, registered);
       reply({});
       await definition.close?.(String(params?.reason ?? ""));
-      process.exit(0);
+      wiring.channel.exit(0);
       return;
     }
     default:
@@ -269,7 +288,7 @@ export function runPlugin(definition: Definition, argv: readonly string[] = proc
     void check(definition);
     return;
   }
-  serve(definition);
+  serve(definition, callerUrl());
 }
 
 /// A package that is spawned as a plugin and imported by its siblings as a
@@ -279,18 +298,12 @@ export function runPlugin(definition: Definition, argv: readonly string[] = proc
 /// file the process was started with is the plugin; both sides are resolved so
 /// a package reached through a linked `node_modules` still matches.
 export function isPluginEntry(moduleUrl: string, started: string | undefined = process.argv[1]): boolean {
+  const adapter = hostAdapter();
+  if (adapter !== null && adapter.expecting(moduleUrl)) return true;
   if (started === undefined || started === "") return false;
-  const here = real(moduleUrl);
-  const main = real(started);
+  const here = canonicalPath(moduleUrl);
+  const main = canonicalPath(started);
   return here !== null && main !== null && here === main;
-}
-
-function real(path: string): string | null {
-  try {
-    return realpathSync(path.includes("://") ? fileURLToPath(path) : path);
-  } catch {
-    return null;
-  }
 }
 
 async function check(definition: Definition): Promise<void> {

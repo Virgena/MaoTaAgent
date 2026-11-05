@@ -12,6 +12,7 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 | `apps/web` | web 插件：一个 HTTP 服务同时提供界面与宿主接口。只有 `serve` profile 会拉起它。 | `apps/web/src/index.ts` |
 | `packages/boot/app-boot` | 为一次启动定下配置文件与内核二进制。 | [README](../packages/boot/app-boot/README.zh.md) |
 | `packages/boot/host` | 拉起内核并在 stdio 上驱动它。 | [README](../packages/boot/host/README.zh.md) |
+| `packages/boot/plugin-host` | 承载所有合规 Node 插件的那个进程：加载、给帧打标，以及内核据此监督的崩溃报告。 | [README](../packages/boot/plugin-host/README.zh.md) |
 | `packages/boot/hmr` | 开发期监视插件：为它盯着的路径发布 `dev.source.changed`。 | `packages/boot/hmr/src/index.ts` |
 | `packages/interaction/permission` | 审批闸门：会话跑在哪一档、还在等回答的问题，以及把每次提问和它的决定配成对的审计文件。 | [README](../packages/interaction/permission/README.zh.md) |
 | `packages/hooks` | 十二个 hook 点：持有那十二个事件的方言包，以及发现 hook 插件、合并它们答案的引擎。 | [十二个 hook 点](user/hooks.zh.md) |
@@ -30,7 +31,7 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 
 1. `maota` 定下配置文件与内核二进制。
 2. 它拉起内核，等内核答出能力表。
-3. 内核把 `[plugins.<id>]` 每一项当自己的子进程起起来，按各插件的 `provides` 路由能力。
+3. 内核把 `[plugins.<id>]` 每一项起起来：合规的 Node 行被加载进 `[kernel.host]` 那个进程，其余行各自一个子进程，内核按各插件的 `provides` 路由能力。一个宿主意味着这些插件共用一个 V8 与一份模块缓存；如果某一行虽然只写包名，却要求自己的 `cwd`、`env` 或额外参数，它仍然保留自己的进程。
 4. 前端 invoke 能力：CLI 与 Web 驱动 `agent.runner`，Web 还通过自己的桥使用 `session`、`settings` 与 `workspace`；runner 负责串行 turn 并调用 `agent.loop`。
 5. 停机时内核收到 `ui_quit` 或 `kernel_exit`，停掉插件并以宿主报出的码退出。
 
@@ -40,7 +41,7 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 
 - 仓库根什么都不放：启动器读 `$MAOTA_HOME`，缺省 `~/.maota`。每个 profile 自带一个 `node_modules`，里面为每一行放一条链接，而那个包从持有该行的组合包自己的依赖树里解析。
 - 启动器一次只选一个 profile：serve 用 serve（base 加 web），其余命令用 default（只 base）。
-- $MAOTA_HOME/profiles/<name>/blmoadll.toml 由该 profile 列出的组合包生成。每一行只写包名，内核从该 profile 自己的 `node_modules` 里解析它，所以只有行变了才会重写这个文件。它是插件集：有哪些插件、怎么起；各插件的默认值由插件自己持有。
+- $MAOTA_HOME/profiles/<name>/blmoadll.toml 由该 profile 列出的组合包生成。每一行只写包名，内核从该 profile 自己的 `node_modules` 里解析它，所以只有行变了才会重写这个文件。它是插件集：有哪些插件、怎么起；各插件的默认值由插件自己持有。它还带一行 `[kernel.host]`，指向安装好的 `@maota/plugin-host` 入口；正是这一行让合规的 Node 插件共用一个进程，删掉它就是全部回退。
 - `$MAOTA_HOME/profiles/<name>/blmoadll.local.toml` 是机器自己的那层：网关、模型、钥匙。它 `extends` 生成的那份，并且赢过它。
 - `disabled = true` 的行照样解析、照样参与合并，但内核从不拉起它，能力表里也没有它。后面的层写 `false` 就启用，内核的 reloader 自己会发现，不用重启。
 - 后加载的层赢：表逐键合并，数组整体替换。
@@ -55,6 +56,21 @@ MaoTa 是一个插件式 agent 框架：Rust 内核把每个插件当自己的�
 - `agent.runner` 是唯一 turn 入口。直接调用 `agent.loop` 会绕过队列、唤醒预算与系统消息投递。
 - 后台任务只存在于进程内。持久计划定义保存在 `$MAOTA_HOME/schedules.json`。
 - 内核从不监视源码；它只看自己的配置，并在宿主开口时重启被点名的那个插件。
+- 插件协议不因插件是独占进程还是共享扩展宿主而改变；只有内核与宿主知道某一行得到了哪种安排，`--check` 会按行报成 `host: "shared"` 或 `"process"`。
+- 宿主崩溃会让全部 hosted 插件同时降级，随后自动重启；被点名两次的插件只在本次运行的内存里被隔离。页面把这一切折成一条状态，用户唯一的恢复手段就是重启应用。
+- hosted 插件与兄弟插件共享一个线程，也从不拥有终端；同步死循环靠杀掉宿主来终止，而不是被抢占。
+
+## 扩展宿主的代价
+
+在同一台 Windows 机器上，serve profile，冷启动 5 次取中位数：
+
+| 指标 | 一插件一进程 | 一个扩展宿主 |
+|---|---|---|
+| 从拉起到能力表 | 1648 ms | 645 ms |
+| 稳态进程数 | 33（31 个插件、内核、控制台宿主） | 3（宿主、内核、控制台宿主） |
+| 内核进程树 RSS | 1535 MiB | 89 MiB |
+
+`scripts/tests/boot-cost.ts` 能在任何机器上重算这两列（`pnpm boot:cost`），所以上面的数字是实测而不是记忆。这张表说不出来的是失败时的表现：单插件死只降级它自己，宿主死会带走全部 hosted 插件并自动重启，而页面仍然只有一行，因为用户能做的事只有一件。
 
 ## 相关文档
 

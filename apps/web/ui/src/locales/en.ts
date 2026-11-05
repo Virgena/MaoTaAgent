@@ -230,4 +230,8 @@ export const messages = defineMessages({
   errQuota: "Quota exhausted",
   errRequest: "The request was rejected",
   errUnknown: "Unknown error: {code} {message}",
+  hostRecovering: "The extension host restarted and is recovering…",
+  hostRestored: "Recovered, {n} extensions ready",
+  hostQuarantined: "Extension {plugin} crashed the host twice and is disabled for this session; restart the app to bring it back",
+  hostFailed: "The extension host did not recover; restart the app",
 });

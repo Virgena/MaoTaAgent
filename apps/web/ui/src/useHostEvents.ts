@@ -2,7 +2,7 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 
 import { applyEvent, type LiveTurn } from "./components/MessageList.tsx";
 import { errorText, failureText } from "./lib/errors.ts";
-import type { Approval, HostEvent } from "./lib/rpc.ts";
+import type { Approval, HostEvent, HostStatus } from "./lib/rpc.ts";
 import type { SettingsView, WorkspaceView } from "./lib/rpc.ts";
 
 export function useHostEvents({
@@ -19,6 +19,7 @@ export function useHostEvents({
   setLives,
   setPending,
   setFailure,
+  setHostStatus,
 }: {
   activeRef: MutableRefObject<{ id: string; cwd: string } | null>;
   turns: MutableRefObject<Map<string, string>>;
@@ -33,9 +34,19 @@ export function useHostEvents({
   setLives: Dispatch<SetStateAction<Record<string, LiveTurn>>>;
   setPending: Dispatch<SetStateAction<string | null>>;
   setFailure: Dispatch<SetStateAction<{ session: string; text: string } | null>>;
+  setHostStatus: Dispatch<SetStateAction<HostStatus | null>>;
 }) {
   return useCallback((event: HostEvent): void => {
     if (onCompactEvent(event)) return;
+    if (event.event === "host.status") {
+      setHostStatus({
+        state: event.host_state ?? "ready",
+        ready: event.host_ready ?? 0,
+        total: event.host_total ?? 0,
+        ...(event.host_plugin === undefined ? {} : { plugin: event.host_plugin }),
+      });
+      return;
+    }
     if (event.event === "settings.changed" && event.settings !== undefined) {
       adoptSettings(event.settings);
       return;

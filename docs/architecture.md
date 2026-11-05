@@ -12,6 +12,7 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 | `apps/web` | The web plugin: one HTTP server for the UI and the host RPC. It ships in the `serve` profile only. | `apps/web/src/index.ts` |
 | `packages/boot/app-boot` | Resolves the config file and the kernel binary for one launch. | [README](../packages/boot/app-boot/README.md) |
 | `packages/boot/host` | Spawns the kernel and drives it over stdio. | [README](../packages/boot/host/README.md) |
+| `packages/boot/plugin-host` | The one process that hosts every eligible Node plugin: loading, frame tagging, and the crash reports the kernel supervises. | [README](../packages/boot/plugin-host/README.md) |
 | `packages/boot/hmr` | The development watcher plugin: publishes `dev.source.changed` for the paths it watches. | `packages/boot/hmr/src/index.ts` |
 | `packages/interaction/permission` | The approval gate: the mode a session runs under, the questions waiting for an answer, and the audit file that pairs each ask with its decision. | [README](../packages/interaction/permission/README.md) |
 | `packages/hooks` | The hook points: the dialect package that owns the twelve events, and the engine that discovers hook plugins and merges what they answer. | [the hook points](user/hooks.md) |
@@ -30,7 +31,7 @@ MaoTa is a plugin-based agent harness: a Rust kernel runs each plugin as its own
 
 1. `maota` resolves the config file and the kernel binary.
 2. It spawns the kernel and waits for the capability table.
-3. The kernel starts every `[plugins.<id>]` entry as its own child process and routes capabilities by each plugin's `provides`.
+3. The kernel starts every `[plugins.<id>]` entry: an eligible Node row is loaded into the `[kernel.host]` process, every other row gets a child process of its own, and the kernel routes capabilities by each plugin's `provides`. One host means one V8 and one module cache for all of them; a row that names a package but asks for its own `cwd`, `env` or extra arguments keeps its own process.
 4. The front end invokes capabilities: the CLI and Web drive `agent.runner`, while the web app also uses `session`, `settings` and `workspace` through its bridge; the runner serializes turns and calls `agent.loop`.
 5. Shutdown asks the kernel for `ui_quit` or `kernel_exit`; the kernel stops its plugins and exits with the code the host reports.
 
@@ -40,7 +41,7 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 
 - Nothing lives in the repository root: the launcher reads `$MAOTA_HOME`, default `~/.maota`. Each profile owns a `node_modules` with one link per row, resolved from the dependency tree of the bundle that owns that row.
 - The launcher picks one profile: serve boots serve (base plus web), every other command boots default (base alone).
-- $MAOTA_HOME/profiles/<name>/blmoadll.toml is generated from the bundles that profile lists. Every row names its package, and the kernel resolves that name out of the profile's own `node_modules`, so boot rewrites the file only when the rows change. It holds the plugin set: which plugins exist and how they start, since every plugin keeps its own defaults.
+- $MAOTA_HOME/profiles/<name>/blmoadll.toml is generated from the bundles that profile lists. Every row names its package, and the kernel resolves that name out of the profile's own `node_modules`, so boot rewrites the file only when the rows change. It holds the plugin set: which plugins exist and how they start, since every plugin keeps its own defaults. It also carries one `[kernel.host]` row naming the installed `@maota/plugin-host` entry; that row is what makes eligible Node plugins share a process, and deleting it returns every plugin to a process of its own.
 - `$MAOTA_HOME/profiles/<name>/blmoadll.local.toml` holds the machine's layer: gateway, model, keys. It `extends` the generated file and wins over it.
 - A row with `disabled = true` is parsed and merged like any other, but the kernel never spawns it and its capability is not in the routing table. A later layer writing `false` enables it, and the kernel's reloader picks that up without a restart.
 - Later layers win: tables merge key by key, arrays are replaced wholesale.
@@ -55,6 +56,21 @@ A development run may also carry the `hmr` plugin, whose generated row ships dis
 - `agent.runner` is the only turn entry point. Direct `agent.loop` calls bypass queueing, wake budget and system delivery.
 - Background jobs are process-local. Durable schedule definitions live in `$MAOTA_HOME/schedules.json`.
 - The kernel never watches source files; it watches its own config and restarts one named plugin when a host asks it to.
+- The plugin protocol is the same whether a plugin owns a process or shares the extension host; only the kernel and the host know which arrangement a row got, and `--check` reports it per row as `host: "shared"` or `"process"`.
+- A host crash degrades every hosted plugin at once, is restarted, and a plugin blamed twice is quarantined in memory for that run only. The page folds all of it into one status line, and restarting the app is the only recovery a user ever needs.
+- A hosted plugin shares a thread with its siblings and never owns the terminal; a synchronous loop is stopped by killing the host, not preempted.
+
+## What the extension host costs
+
+Measured on one Windows machine, serve profile, five cold starts, median:
+
+| Measurement | One process per plugin | One extension host |
+|---|---|---|
+| Spawn to capability table | 1648 ms | 645 ms |
+| Processes at steady state | 33 (31 plugins, kernel, console host) | 3 (host, kernel, console host) |
+| Kernel process tree RSS | 1535 MiB | 89 MiB |
+
+`scripts/tests/boot-cost.ts` produces both columns on any machine (`pnpm boot:cost`), so the numbers above are reproducible rather than remembered. The one thing the table cannot show is the failure story: a plugin that dies alone degrades alone, a host that dies takes every hosted plugin with it and is restarted, and the page still shows one line because there is only one thing the user could do.
 
 ## Related documentation
 

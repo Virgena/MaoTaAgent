@@ -2,6 +2,15 @@ import type { HostEvent, RpcFailure } from "../../../src/protocol.ts";
 
 export type * from "../../../src/protocol.ts";
 
+/// The extension host as the page sees it: one row for every hosted plugin,
+/// whatever happened to them.
+export interface HostStatus {
+  state: string;
+  ready: number;
+  total: number;
+  plugin?: string;
+}
+
 export class CallFailed extends Error {
   code: number;
 

@@ -231,4 +231,8 @@ export const messages = defineMessages({
   errQuota: "配额已用尽",
   errRequest: "请求被拒绝",
   errUnknown: "未知错误: {code} {message}",
+  hostRecovering: "扩展宿主已重启，正在恢复…",
+  hostRestored: "已恢复，{n} 个扩展就绪",
+  hostQuarantined: "扩展 {plugin} 连续两次导致宿主崩溃，本次会话已停用；重启应用即可恢复",
+  hostFailed: "扩展宿主未能恢复；重启应用即可恢复",
 });

@@ -17,6 +17,7 @@ import {
   call,
   type AppInfo,
   type Approval,
+  type HostStatus,
   type ModelRoute,
   type SessionFile,
   type SessionMessage,
@@ -27,6 +28,7 @@ export function App() {
   const { width: sidebarWidth, resizing: sidebarResizing, startResize, nudge } = useSidebarWidth();
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [kernelError, setKernelError] = useState<string | null>(null);
+  const [hostStatus, setHostStatus] = useState<HostStatus | null>(null);
   const { settings, workspace, adoptSettings, adoptWorkspace, updateSettings, updateWorkspace } = useHostState({
     localeFallback: info?.i18n?.locale,
     onError: setKernelError,
@@ -41,7 +43,6 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
-  const [picking, setPicking] = useState(false);
   const [manualPath, setManualPath] = useState(false);
   const [thinking, setThinking] = useState<string>("off");
   const [modelRoute, setModelRoute] = useState<ModelRoute | null>(null);
@@ -232,8 +233,12 @@ export function App() {
     setLives,
     setPending,
     setFailure,
+    setHostStatus,
   });
   const reconnect = useCallback((): void => {
+    // The stream came back after a drop: the extension host is what dropped, so
+    // the page says so until the replay status arrives with the truth.
+    setHostStatus({ state: "recovering", ready: 0, total: 0 });
     const current = activeRef.current;
     if (current !== null && !drafts.current.has(current.id)) {
       void openSession(current.id, current.cwd);
@@ -243,6 +248,11 @@ export function App() {
     void refreshSessions();
   }, [loadSpawned, openSession, rebuildApprovals, refreshSessions]);
   useHostStream({ onEvent: handleEvent, onReconnect: reconnect });
+  useEffect(() => {
+    if (hostStatus?.state !== "ready") return;
+    const timer = setTimeout(() => setHostStatus(null), 3_000);
+    return () => clearTimeout(timer);
+  }, [hostStatus]);
   useEffect(() => {
     void loadInfo();
     void refreshSessions();
@@ -374,17 +384,8 @@ export function App() {
     if (next !== undefined) setProject(cwd);
   };
 
-  const pickProject = async (): Promise<void> => {
-    if (picking) return;
-    setPicking(true);
-    try {
-      const reply = await call<{ path: string | null }>("workspace.pick");
-      if (reply.path !== null) await addProject(reply.path);
-    } catch {
-      setManualPath(true);
-    } finally {
-      setPicking(false);
-    }
+  const pickProject = (): void => {
+    setManualPath(true);
   };
 
   const allSessions = useMemo(() => {
@@ -461,6 +462,7 @@ export function App() {
         page={page}
         info={info}
         kernelError={kernelError}
+        hostStatus={hostStatus}
         project={project}
         projects={projects}
         sessions={allSessions}
@@ -481,7 +483,7 @@ export function App() {
         palette={palette}
         onPalette={setPalette}
         onNew={newChat}
-        onPickProject={() => void pickProject()}
+        onPickProject={pickProject}
         onOpen={open}
         onRetry={() => void loadInfo()}
         onOpenModels={() => {

@@ -1,5 +1,11 @@
 node_modules/
 apps/web/dist/
 lib/
+dist/
+
+apps/desktop/*.syso
+/maota.exe
+/.maota/
+/.cache/
 
 .agents/

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -34,12 +35,34 @@ func (a *App) startup(ctx context.Context) {
 		a.launcher.ctx = ctx
 		go a.launcher.run()
 	}
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		a.reveal()
+	}()
 }
 
 func (a *App) ready(ctx context.Context) {
 	if a.launcher != nil {
 		a.launcher.markReady()
 	}
+	a.reveal()
+}
+
+func (a *App) reveal() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowShow(a.ctx)
+	runtime.WindowUnminimise(a.ctx)
+	runtime.WindowSetAlwaysOnTop(a.ctx, true)
+	focusOwnWindow()
+	time.AfterFunc(400*time.Millisecond, func() {
+		if a.ctx == nil {
+			return
+		}
+		runtime.WindowSetAlwaysOnTop(a.ctx, false)
+		focusOwnWindow()
+	})
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -108,8 +131,7 @@ func main() {
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId: "maota-desktop-single-instance",
 			OnSecondInstanceLaunch: func(options.SecondInstanceData) {
-				runtime.WindowShow(app.ctx)
-				runtime.WindowUnminimise(app.ctx)
+				app.reveal()
 			},
 		},
 		Windows: &windows.Options{

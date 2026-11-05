@@ -1,4 +1,5 @@
 import { frameReader, writeFrame } from "./frame.ts";
+import type { Transport } from "./host.ts";
 
 export interface Route {
   plugin: string;
@@ -110,6 +111,7 @@ export class Channel {
   private readonly streams = new Map<string, Queue>();
   private readonly parked = new Map<string, Array<{ method: string; params: any }>>();
   private readonly subscriptions = new Map<string, Subscription>();
+  private transport: Transport = { write: writeFrame, exit: (code) => process.exit(code) };
   private next = 0;
 
   constructor(hooks: ChannelHooks) {
@@ -117,8 +119,22 @@ export class Channel {
   }
 
   listen(): void {
-    process.stdin.on("data", frameReader((body) => this.receive(JSON.parse(body.toString("utf8")))));
-    process.stdin.on("end", () => process.exit(0));
+    process.stdin.on("data", frameReader((body) => this.deliver(body)));
+    process.stdin.on("end", () => this.transport.exit(0));
+  }
+
+  /// Where this channel's frames go. A process plugin keeps the default (fd 1);
+  /// a shared host installs its own tagged writer.
+  attach(transport: Transport): void {
+    this.transport = transport;
+  }
+
+  deliver(body: Buffer): void {
+    this.receive(JSON.parse(body.toString("utf8")));
+  }
+
+  exit(code: number): void {
+    this.transport.exit(code);
   }
 
   call(capability: string, method: string, params: unknown, options: CallOptions = {}): Promise<unknown> {
@@ -131,7 +147,7 @@ export class Channel {
     };
     const streamId = String(reply?.stream_id ?? "");
     if (streamId === "") throw new CallError(-32603, `${capability}/${method} did not return a stream_id`);
-    return this.attach(streamId);
+    return this.attachStream(streamId);
   }
 
   publish(topic: string, payload: unknown): Promise<void> {
@@ -141,12 +157,18 @@ export class Channel {
   /// Events are a broadcast, so the handler is registered before the kernel is
   /// asked to join: nothing can be delivered in the gap, and a refused
   /// subscription leaves no handler behind.
-  async subscribe(patterns: readonly string[], handler: EventHandler): Promise<string> {
+  async subscribe(
+    patterns: readonly string[],
+    handler: EventHandler,
+    options: { replay?: boolean } = {},
+  ): Promise<string> {
     if (patterns.length === 0) throw new CallError(-32602, "subscribe needs at least one pattern");
     const id = `s-${++this.next}`;
     this.subscriptions.set(id, { kernelId: "", patterns, handler });
     try {
-      const reply = (await this.direct("kernel.subscribe", { patterns })) as { subscription_id?: unknown };
+      const params: Record<string, unknown> = { patterns };
+      if (options.replay === true) params.replay = true;
+      const reply = (await this.direct("kernel.subscribe", params)) as { subscription_id?: unknown };
       const found = this.subscriptions.get(id);
       if (found !== undefined) found.kernelId = String(reply?.subscription_id ?? "");
       return id;
@@ -165,7 +187,7 @@ export class Channel {
   }
 
   notify(method: string, params: unknown): void {
-    writeFrame({ jsonrpc: "2.0", method, params });
+    this.transport.write({ jsonrpc: "2.0", method, params });
   }
 
   log(level: string, message: string, fields: Record<string, unknown> = {}): void {
@@ -176,7 +198,7 @@ export class Channel {
     const id = `k-${++this.next}`;
     return new Promise<unknown>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
-      writeFrame({ jsonrpc: "2.0", id, method, params });
+      this.transport.write({ jsonrpc: "2.0", id, method, params });
     });
   }
 
@@ -209,7 +231,7 @@ export class Channel {
           reject(error);
         },
       });
-      writeFrame({
+      this.transport.write({
         jsonrpc: "2.0",
         id,
         method: "kernel.invoke",
@@ -218,10 +240,10 @@ export class Channel {
     });
   }
 
-  private attach(streamId: string): InboundStream {
+  private attachStream(streamId: string): InboundStream {
     const queue = new Queue();
     this.streams.set(streamId, queue);
-    for (const { method, params } of this.parked.get(streamId) ?? []) this.deliver(method, streamId, params, queue);
+    for (const { method, params } of this.parked.get(streamId) ?? []) this.pushToStream(method, streamId, params, queue);
     this.parked.delete(streamId);
     const cancel = (): void => {
       this.parked.delete(streamId);
@@ -265,14 +287,14 @@ export class Channel {
     const reply = (result: unknown): void => {
       if (replied) return;
       replied = true;
-      writeFrame({ jsonrpc: "2.0", id, result: result ?? {} });
+      this.transport.write({ jsonrpc: "2.0", id, result: result ?? {} });
     };
     try {
       await this.hooks.request(method, params, reply);
       reply({});
     } catch (error) {
       if (replied) return;
-      writeFrame({
+      this.transport.write({
         jsonrpc: "2.0",
         id,
         error:
@@ -289,7 +311,7 @@ export class Channel {
       case "$/stream/error": {
         const streamId = String(params?.stream_id);
         const queue = this.streams.get(streamId);
-        if (queue) this.deliver(method, streamId, params, queue);
+        if (queue) this.pushToStream(method, streamId, params, queue);
         else this.park(streamId, method, params);
         return;
       }
@@ -302,7 +324,7 @@ export class Channel {
     }
   }
 
-  private deliver(method: string, streamId: string, params: any, queue: Queue): void {
+  private pushToStream(method: string, streamId: string, params: any, queue: Queue): void {
     if (method === "$/stream/error") {
       this.streams.delete(streamId);
       queue.fail(

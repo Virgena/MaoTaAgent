@@ -98,8 +98,12 @@ const kernel = await boot(config, {
   bin,
   onLog: (line) => {
     const level = String(line.level ?? "info");
-    if (level === "debug" || (serve && level === "info")) return;
-    console.error(`${serve ? "MaoTa" : "[kernel]"}: ${line.message ?? JSON.stringify(line)}`);
+    const message = String(line.message ?? "");
+    if (level === "debug") return;
+    // `serve` keeps the terminal quiet, except for the one line that says what
+    // this launch actually started.
+    if (serve && level === "info" && !message.startsWith("boot: ")) return;
+    console.error(`${serve ? "MaoTa" : "[kernel]"}: ${message || JSON.stringify(line)}`);
   },
 }).catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));

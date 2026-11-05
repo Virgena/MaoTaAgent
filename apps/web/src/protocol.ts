@@ -259,6 +259,10 @@ export interface HostEvent {
   error?: string;
   settings?: SettingsView;
   workspace?: WorkspaceView;
+  host_state?: string;
+  host_ready?: number;
+  host_total?: number;
+  host_plugin?: string;
 }
 
 export interface Approval {

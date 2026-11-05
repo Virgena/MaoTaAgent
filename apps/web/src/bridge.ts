@@ -111,8 +111,19 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
     };
   }
 
-  function forwardCompact(topic: string, payload: unknown): HostEvent {
+  /// One aggregate row: a crashed host degrades every plugin at once, and the page says so once.
+  function forwardHost(payload: unknown): HostEvent {
     const event = (payload ?? {}) as Record<string, unknown>;
+    return {
+      event: "host.status",
+      host_state: typeof event.state === "string" ? event.state : "ready",
+      host_ready: typeof event.ready === "number" ? event.ready : 0,
+      host_total: typeof event.total === "number" ? event.total : 0,
+      ...(typeof event.plugin === "string" ? { host_plugin: event.plugin } : {}),
+    };
+  }
+
+  function forwardCompact(topic: string, payload: unknown): HostEvent {    const event = (payload ?? {}) as Record<string, unknown>;
     return {
       event: "compact." + topic.slice("agent.compact.".length),
       session_id: typeof event.session_id === "string" ? event.session_id : "",
@@ -430,8 +441,9 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
     async open(): Promise<void> {
       try {
         subscription = await channel.subscribe(
-          ["permission.requested", "permission.settled", "agent.subagent.*", "agent.compact.*", "jobs.registered", "jobs.progress", "jobs.settled", "jobs.removed", "agent.turn.*", "settings.changed", "workspace.changed"],
+          ["permission.requested", "permission.settled", "agent.subagent.*", "agent.compact.*", "jobs.registered", "jobs.progress", "jobs.settled", "jobs.removed", "agent.turn.*", "settings.changed", "workspace.changed", "kernel.host.status"],
           (topic, _seq, payload) => {
+            if (topic === "kernel.host.status") return emit(forwardHost(payload));
             if (topic === "settings.changed") {
               emit({ event: "settings.changed", settings: payload as SettingsView });
               return;
@@ -447,6 +459,7 @@ export function createBridge(channel: Channel, capabilities: Record<string, unkn
                 : forwardPermission(topic, payload);
             if (event !== null) emit(event);
           },
+          { replay: true },
         );
       } catch (error) {
         channel.log("warn", `web: could not subscribe to the permission topics: ${messageOf(error)}`);

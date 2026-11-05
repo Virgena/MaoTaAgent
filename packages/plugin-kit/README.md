@@ -32,6 +32,12 @@ Every MaoTa package imports this one, and nothing here imports them back. It own
 | `CallError` | A failure with a JSON-RPC code and optional `data`. |
 | `Channel` | `call`, `stream`, `publish`, `subscribe`, `unsubscribe`, `notify` and `log` over the kernel connection. |
 | `ProviderStream` | Pushes chunks for an invoke that asked for `meta.stream`. |
+| `installHostAdapter` / `hostAdapter` | The seam a shared extension host uses: `isPluginEntry` asks it first, and `serve` hands it the channel instead of binding this process's stdio. |
+| `Transport` / `HostAdapter` | Where a channel's frames go, and the host's side of that seam. |
+
+### Sharing one process
+
+A package never asks where it runs. Spawned as its own process, a plugin writes fd 1 and reads fd 0 exactly as before. Loaded by a shared host, the same `runPlugin` call hands its channel to that host: frames are tagged with the plugin id and written by the host's one writer, and `isPluginEntry` answers from the host's list of entries rather than from `process.argv`. An absent adapter changes nothing, which is why using a host is the kernel's choice and not a package's.
 
 ### Declaring a tool
 

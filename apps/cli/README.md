@@ -77,11 +77,10 @@ These commands call the `jobs` and `schedule` capabilities. They never write tas
 
 Both inputs are picked by [`@maota/app-boot`](../../packages/boot/app-boot/README.md) before anything is spawned:
 
-- Config file: `--config`, then `BLMOADLL_CONFIG`, then `$MAOTA_HOME/profiles/<profile>/blmoadll.local.toml` when it exists, then the generated `blmoadll.toml` beside it; `MAOTA_HOME` defaults to `~/.maota`. A first run writes the profile manifest, generates that config from the bundles the profile lists, and links each row's package into the profile's own `node_modules`; `MaoTa: wrote <path>` goes to stderr. An explicit `--config` is never written to, and a missing one exits 2 before the kernel is spawned.
-- Profile: `--profile`, else `serve` for the `serve` command and `default` for every other one. A profile is a directory under `$MAOTA_HOME/profiles`; its `package.json` records the bundle list boot reads back, so the plugin set can be changed from the home directory alone.
+- Config file: `--config`, then `BLMOADLL_CONFIG`, then `$MAOTA_HOME/profiles/<profile>/blmoadll.local.toml` when it exists, then the generated `blmoadll.toml` beside it; `MAOTA_HOME` defaults to `~/.maota`. A first run writes the profile manifest, generates that config from the bundles the profile lists, and links each row's package into the profile's own `node_modules`; `MaoTa: wrote <path>` goes to stderr. An explicit `--config` is never written to, and a missing one exits 2 before the kernel is spawned. The generated file also carries a `[kernel.host]` row naming the installed `@maota/plugin-host` entry: that row is what lets eligible Node plugins share one process, and deleting it is the whole rollback.- Profile: `--profile`, else `serve` for the `serve` command and `default` for every other one. A profile is a directory under `$MAOTA_HOME/profiles`; its `package.json` records the bundle list boot reads back, so the plugin set can be changed from the home directory alone.
 - Kernel binary: `--kernel`, then `BLMOADLL_BIN`, then the installed `@virgena/blmoadll` binary, then the neighbouring `blmoadll` debug build.
 
-Log lines on the kernel's stderr go to stderr: `serve` drops `info` lines and prefixes what it keeps with `MaoTa`, every other mode prefixes with `[kernel]`.
+Log lines on the kernel's stderr go to stderr: `serve` drops `info` lines and prefixes what it keeps with `MaoTa`, every other mode prefixes with `[kernel]`. The kernel's one `boot:` line is the exception `serve` keeps, because it is the only line that says what the launch actually started: `boot: 31 plugins, 1 host, 0 processes`.
 
 <a id="dev-hot-reload"></a>
 ## Dev hot reload

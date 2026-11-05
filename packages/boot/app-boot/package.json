@@ -20,6 +20,7 @@
   "types": "lib/index.d.ts",
   "devDependencies": {
     "@maota/base": "workspace:*",
+    "@maota/plugin-host": "workspace:*",
     "@maota/web-bundle": "workspace:*",
     "@types/semver": "^7.7.1"
   },

@@ -32,6 +32,12 @@ kind: "package-reference"
 | `CallError` | 带 JSON-RPC 码与可选 `data` 的失败。 |
 | `Channel` | 在内核连接上的 `call`、`stream`、`publish`、`subscribe`、`unsubscribe`、`notify` 与 `log`。 |
 | `ProviderStream` | 为要了 `meta.stream` 的 invoke 推块。 |
+| `installHostAdapter` / `hostAdapter` | 共享扩展宿主接入的缝：`isPluginEntry` 先问它，`serve` 把 channel 交给它，而不是绑定本进程的 stdio。 |
+| `Transport` / `HostAdapter` | channel 的帧往哪去，以及宿主这一侧的形状。 |
+
+### 共用一个进程
+
+包从不询问自己跑在哪里。作为独立进程被拉起时，插件的读写与从前一样是 fd 1 和 fd 0。被共享宿主加载时，同一个 `runPlugin` 调用把 channel 交给宿主：帧带上插件 id，由宿主的唯一写者写出，`isPluginEntry` 也改成问宿主的入口清单，而不是看 `process.argv`。没有适配器时一切不变，所以用不用宿主是内核的选择，不是包的选择。
 
 ### 声明一个工具
 

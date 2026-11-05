@@ -27,6 +27,7 @@ CLI 组合了前两个包。`hmr` 是本组唯一的插件，由内核挂载；�
 |---|---|
 | [`app-boot`](app-boot/README.zh.md) | 定下一次启动读哪个配置文件、跑哪个内核二进制，并在首次运行时生成 `$MAOTA_HOME/profiles/<name>` 里的配置文件。 |
 | [`host`](host/README.zh.md) | 拉起内核，然后在内核的 stdio 协议上 invoke、收流、订阅、停机。 |
+| [`plugin-host`](plugin-host/README.zh.md) | 承载所有合规 Node 插件的那个进程：加载、给帧打标，以及内核据此监督的崩溃报告。 |
 | [`hmr`](hmr/README.zh.md) | 监视配置的 roots，发布 `dev.source.changed`，让宿主重启真正 import 了改动文件的插件。 |
 
 <a id="related-documentation"></a>

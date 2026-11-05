@@ -1,6 +1,6 @@
 export default {
   workspace: {
-    exclude: ["**/node_modules/**", "**/dist/**", "**/test?(s)/**", "**/t?(e)mp/**"],
+    exclude: ["**/node_modules/**", "**/dist/**", "**/test?(s)/**", "**/t?(e)mp/**", "**/docsweb/**"],
   },
   entry: ["src/index.ts"],
   outDir: "lib",

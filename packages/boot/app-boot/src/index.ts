@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, rmdirSync, statSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -30,6 +30,13 @@ export interface PluginRow {
   name: string;
   disabled?: boolean;
   config?: Record<string, unknown>;
+}
+
+/// The `[kernel.host]` row: the one Node process that hosts every eligible Node
+/// plugin. The launcher writes it on every run, so the user never edits it.
+export interface HostRow {
+  command: string;
+  args: string[];
 }
 
 export interface PluginPatchInsert {
@@ -355,8 +362,24 @@ const HEADER: string[] = [
   "",
 ];
 
-export function renderConfig(rows: readonly PluginRow[]): string {
+export function renderConfig(
+  rows: readonly PluginRow[],
+  host: HostRow | null = null,
+  runtime: HostRow | null = null,
+): string {
   const lines: string[] = [...HEADER];
+  if (runtime !== null) {
+    lines.push("[kernel.runtime]");
+    lines.push(`command = ${tomlValue(runtime.command)}`);
+    lines.push(`args = [${runtime.args.map(tomlValue).join(", ")}]`);
+    lines.push("");
+  }
+  if (host !== null) {
+    lines.push("[kernel.host]");
+    lines.push(`command = ${tomlValue(host.command)}`);
+    lines.push(`args = [${host.args.map(tomlValue).join(", ")}]`);
+    lines.push("");
+  }
   for (const row of rows) {
     lines.push(`[plugins.${row.id}]`);
     if (row.disabled === true) lines.push("disabled = true");
@@ -370,6 +393,19 @@ export function renderConfig(rows: readonly PluginRow[]): string {
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
+/// A Windows junction is a directory to Node: `lstat` reports a directory and
+/// `readlink` refuses it, so the only proof that the path already holds the
+/// directory we want is the file identity both stats share.
+function sameDirectory(link: string, target: string): boolean {
+  try {
+    const left = statSync(link);
+    const right = statSync(target);
+    return left.ino === right.ino && left.dev === right.dev;
+  } catch {
+    return false;
+  }
+}
+
 function linkPackage(dir: string, row: BundlePluginRow): void {
   let target: string;
   try {
@@ -379,21 +415,39 @@ function linkPackage(dir: string, row: BundlePluginRow): void {
   }
   const link = join(dir, "node_modules", ...row.name.split("/"));
   mkdirSync(dirname(link), { recursive: true });
-  const existing = lstatSync(link, { throwIfNoEntry: false });
-  if (existing !== undefined) {
-    if (!existing.isSymbolicLink()) {
-      throw new Error(`maota: ${link} already exists and is not a link; move it, then boot again`);
-    }
-    let current: string | null = null;
+  if (lstatSync(link, { throwIfNoEntry: false }) !== undefined) {
+    if (sameDirectory(link, target)) return;
+    let dangling = false;
     try {
-      current = realpathSync(link);
+      statSync(link);
     } catch {
-      current = null;
+      dangling = true;
     }
-    if (current === realpathSync(target)) return;
-    rmdirSync(link);
+    if (!dangling) {
+      throw new Error(`maota: ${link} already exists and is not the link to ${target}; move it, then boot again`);
+    }
+    try {
+      rmdirSync(link);
+    } catch {
+      unlinkSync(link);
+    }
   }
   symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+}
+
+/// The runtime row this launch would write. A checkout where the runtime
+/// package cannot be resolved still boots: without the row the kernel keeps the
+/// legacy arrangement, one process per plugin row.
+function runtimeRow(root: string, profileDir: string, profile: string): HostRow | null {
+  try {
+    return {
+      command: process.execPath,
+      args: [entryOf("@maota/runtime", root), profileDir, root, profile],
+    };
+  } catch (error) {
+    process.stderr.write(`MaoTa: no runtime (${messageOf(error)}); the kernel keeps the legacy plugin path\n`);
+    return null;
+  }
 }
 
 export async function ensureProfile(
@@ -418,7 +472,7 @@ export async function ensureProfile(
   const resolved = await resolveBundleRows(bundlesOfProfile(dir, profile), root, dir);
   for (const warning of resolved.warnings) process.stderr.write(`MaoTa: skipped ${warning}\n`);
   for (const row of resolved.rows) linkPackage(dir, row);
-  const rendered = renderConfig(resolved.rows);
+  const rendered = renderConfig(resolved.rows, null, runtimeRow(root, dir, profile));
   const target = join(dir, GENERATED);
   if (!existsSync(target) || readFileSync(target, "utf8") !== rendered) {
     writeFileSync(target, rendered);

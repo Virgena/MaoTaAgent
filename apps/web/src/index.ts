@@ -124,35 +124,6 @@ function openBrowser(target: string, channel: Channel): void {
   }
 }
 
-
-function pickFolder(): Promise<string | null> {
-  if (process.platform !== "win32") {
-    return Promise.reject(new Error("only Windows has a native folder picker on this machine; type the path instead"));
-  }
-  const script = [
-    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
-    "Add-Type -AssemblyName System.Windows.Forms",
-    "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-    "$d.Description = 'Pick a workspace folder'",
-    "$d.ShowNewFolderButton = $true",
-    "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }",
-  ].join("; ");
-
-  const run = (shell: string): Promise<string | null> =>
-    new Promise((resolve, reject) => {
-      const child = spawn(shell, ["-NoProfile", "-STA", "-Command", script], { windowsHide: true });
-      const chunks: Buffer[] = [];
-      child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-      child.on("error", reject);
-      child.on("close", () => {
-        const picked = Buffer.concat(chunks).toString("utf8").trim();
-        resolve(picked === "" ? null : picked);
-      });
-    });
-
-  return run("pwsh").catch(() => run("powershell.exe"));
-}
-
 async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const pathname = new URL(request.url ?? "/", "http://127.0.0.1").pathname;
   if (pathname === "/rpc") return await rpc(request, response);
@@ -176,7 +147,7 @@ async function rpc(request: IncomingMessage, response: ServerResponse): Promise<
       method === "app.info"
         ? await info()
         : method === "workspace.pick"
-          ? { path: await pickFolder() }
+          ? { path: null }
           : await bridge.handle(method, params);
     json(response, { result: result ?? null });
   } catch (error) {
@@ -224,9 +195,10 @@ function middleware(middlewares: Middleware, request: IncomingMessage, response:
 
 async function sendStatic(response: ServerResponse, pathname: string): Promise<void> {
   const rel = decodeURIComponent(pathname).replace(/^\/+/, "");
-  if (!rel.includes("..")) {
-    const body = await readFile(join(DIST, rel === "" ? "index.html" : rel)).catch(() => null);
-    if (body) return write(response, 200, TYPES[extname(rel)] ?? "application/octet-stream", body);
+  const name = rel === "" ? "index.html" : rel;
+  if (!name.includes("..")) {
+    const body = await readFile(join(DIST, name)).catch(() => null);
+    if (body) return write(response, 200, TYPES[extname(name)] ?? "application/octet-stream", body);
   }
   const home = await readFile(join(DIST, "index.html")).catch(() => null);
   if (!home) {

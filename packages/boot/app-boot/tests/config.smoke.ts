@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -25,6 +25,13 @@ const appBootRoot = join(import.meta.dirname, "..");
 const dir = mkdtempSync(join(tmpdir(), "maota-config-"));
 const home = join(dir, "home");
 const env = { MAOTA_HOME: home } as NodeJS.ProcessEnv;
+
+/// `realpath` does not resolve a Windows junction, so identity is the check.
+function sameDirectory(left: string, right: string): boolean {
+  const a = statSync(left);
+  const b = statSync(right);
+  return a.ino === b.ino && a.dev === b.dev;
+}
 
 assert.equal(maotaHome(env), home);
 assert.ok(maotaHome({} as NodeJS.ProcessEnv).endsWith(".maota"));
@@ -58,10 +65,38 @@ assert.deepEqual(bundlesOfProfile(generated, "default"), ["@maota/base"], "the m
 
 const body = readFileSync(config, "utf8");
 for (const row of base.rows) assert.ok(body.includes(`[plugins.${row.id}]`), `${row.id} should be configured`);
+assert.ok(body.includes("[kernel.runtime]"), "the generated config names the runtime");
+assert.equal(body.includes("[kernel.host]"), false, "the runtime and the shared host never appear together");
+assert.ok(
+  body.indexOf("[kernel.runtime]") < body.indexOf("[plugins."),
+  "the runtime row comes before the first plugin row",
+);
+assert.ok(
+  body.includes(`command = ${JSON.stringify(process.execPath)}`),
+  "the runtime runs through the same node that generated the file",
+);
+assert.ok(
+  body.includes("runtime") && body.includes("index.js"),
+  "the runtime entry is the package's built entry",
+);
+assert.ok(
+  body.includes(JSON.stringify(generated)) && body.includes('"default"'),
+  "the runtime row carries the profile directory and the profile name",
+);
+const withoutHost = renderConfig(base.rows);
+assert.equal(withoutHost.includes("[kernel.host]"), false, "a launch with no host package writes no host row");
+assert.equal(withoutHost.includes("[kernel.runtime]"), false, "a launch with no runtime writes no runtime row");
+const withHost = renderConfig([], { command: "node", args: ["/nowhere/host.js"] });
+assert.ok(withHost.includes("[kernel.host]"), "a host row renders on its own");
+assert.ok(withHost.includes('args = ["/nowhere/host.js"]'));
+const withRuntime = renderConfig([], null, { command: "node", args: ["/nowhere/runtime.js"] });
+assert.ok(withRuntime.includes("[kernel.runtime]"), "a runtime row renders on its own");
+assert.ok(withRuntime.includes('args = ["/nowhere/runtime.js"]'));
+assert.equal(withRuntime.includes("[kernel.host]"), false, "a runtime row never drags a host row in");
 for (const row of base.rows) {
   const link = join(generated, "node_modules", ...row.name.split("/"));
   assert.ok(existsSync(join(link, "package.json")), `the profile does not link ${row.name}`);
-  assert.equal(realpathSync(link), realpathSync(packageDir(row.name, row.root)), `${row.name} should come from ${row.bundle}`);
+  assert.ok(sameDirectory(link, packageDir(row.name, row.root)), `${row.name} should come from ${row.bundle}`);
 }
 
 const rewritten = readFileSync(config, "utf8");
@@ -163,7 +198,7 @@ writeJson(join(ownedProfile, "package.json"), {
 });
 await ensureProfile(ownedHome, "default", scratch);
 assert.ok(readFileSync(join(ownedProfile, "blmoadll.toml"), "utf8").includes("[plugins.owned]"));
-assert.equal(realpathSync(join(ownedProfile, "node_modules", ...ownedName.split("/"))), realpathSync(ownedPlugin));
+assert.ok(sameDirectory(join(ownedProfile, "node_modules", ...ownedName.split("/")), ownedPlugin));
 
 const broken = bundleFixture(scratch, "@scratch/broken", "not = [valid\n");
 const skipped = await resolveBundleRows(["@scratch/broken"], scratch, scratch);
@@ -179,7 +214,7 @@ assert.match(incompatibleResult.warnings[0] ?? "", /plugin-kit/);
 const profileBundle = join(scratch, "profiles", "default", "node_modules", "@scratch", "owned");
 mkdirSync(dirname(profileBundle), { recursive: true });
 symlinkSync(ownedBundle, profileBundle, "junction");
-assert.equal(resolveBundleDir("@scratch/owned", scratch, join(scratch, "profiles", "default")), realpathSync(ownedBundle));
+assert.ok(sameDirectory(resolveBundleDir("@scratch/owned", scratch, join(scratch, "profiles", "default")), ownedBundle));
 assert.throws(() => entryOf("@scratch/missing", scratch), /cannot resolve the entry/);
 assert.equal(renderConfig([]).includes("[plugins."), false, "an empty bundle list renders no rows");
 assert.ok(resolveKernelBin({ installed: null, root: repoRoot, env: {} as NodeJS.ProcessEnv }).length > 0);

@@ -15,6 +15,7 @@
     "@maota/app-boot": "workspace:*",
     "@maota/base": "workspace:*",
     "@maota/host": "workspace:*",
+    "@maota/plugin-host": "workspace:*",
     "@maota/web-bundle": "workspace:*",
     "@maota/plugin-kit": "workspace:*"
   },

@@ -78,6 +78,7 @@ const CHECKS: Step[] = [
   { name: "plugin-kit/config-keys", cmd: "node packages/plugin-kit/src/config-keys.check.ts" },
   { name: "plugin-kit/tool-schema", cmd: "node packages/plugin-kit/src/tool-schema.check.ts" },
   { name: "plugin-kit/channel", cmd: "node packages/plugin-kit/src/channel.check.ts" },
+  { name: "plugin-kit/host", cmd: "node packages/plugin-kit/src/host.check.ts" },
   { name: "app-boot/plugins", cmd: "node packages/boot/app-boot/src/plugins.check.ts" },
   { name: "web/types", cmd: "pnpm -C apps/web check" },
 ];

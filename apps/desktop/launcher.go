@@ -44,6 +44,8 @@ type launcher struct {
 	pending  []string
 	domReady bool
 	stopped  bool
+	gone     bool
+	killer   func(int) error
 }
 
 func newLauncher(ctx context.Context, dir, home, node, logPath string, logger *log.Logger) *launcher {
@@ -55,7 +57,20 @@ func newLauncher(ctx context.Context, dir, home, node, logPath string, logger *l
 		logger:  logger,
 		logPath: logPath,
 		exited:  make(chan error, 1),
+		killer:  killTree,
 	}
+}
+
+func killTree(pid int) error {
+	kill := exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F")
+	kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	return kill.Run()
+}
+
+// / A PID is only ours while the host is alive; once it exited the number can
+// / belong to an unrelated process, so no tree may be killed for it.
+func needsKill(cmd *exec.Cmd, gone bool) bool {
+	return !gone && cmd != nil && cmd.Process != nil
 }
 
 func (l *launcher) remember(line string) {
@@ -91,8 +106,8 @@ func (l *launcher) fail(title, detail string) {
 	l.exec("window.maotaFail(" + js(title) + "," + js(detail) + "," + js(l.logPath) + ")")
 }
 
-/// Scripts run against the window, which may not have loaded its page yet: a
-/// status set in the first milliseconds would otherwise vanish.
+// / Scripts run against the window, which may not have loaded its page yet: a
+// / status set in the first milliseconds would otherwise vanish.
 func (l *launcher) exec(script string) {
 	l.mu.Lock()
 	if !l.domReady {
@@ -126,7 +141,7 @@ func (l *launcher) run() {
 	}
 }
 
-/// One boot attempt. `true` means the profile was stale and a retry is due.
+// / One boot attempt. `true` means the profile was stale and a retry is due.
 func (l *launcher) frame(attempt int) bool {
 	l.status("正在检查运行环境…")
 
@@ -181,10 +196,24 @@ func (l *launcher) frame(attempt int) bool {
 
 	l.mu.Lock()
 	l.cmd = cmd
+	l.gone = false
+	stopped := l.stopped
 	l.mu.Unlock()
+	if stopped {
+		if err := l.killer(cmd.Process.Pid); err != nil {
+			l.logger.Println("taskkill:", err)
+		}
+		return false
+	}
 
 	go func() {
 		waitErr := cmd.Wait()
+		l.mu.Lock()
+		l.gone = true
+		if l.cmd == cmd {
+			l.cmd = nil
+		}
+		l.mu.Unlock()
 		l.remember(fmt.Sprintf("host 退出：%v", waitErr))
 		select {
 		case l.exited <- waitErr:
@@ -219,8 +248,8 @@ func (l *launcher) frame(attempt int) bool {
 	return false
 }
 
-/// Half-built profiles are what a killed first boot leaves behind: the links are
-/// regenerated on the next boot, so dropping them is always safe.
+// / Half-built profiles are what a killed first boot leaves behind: the links are
+// / regenerated on the next boot, so dropping them is always safe.
 func (l *launcher) resetProfile() {
 	profiles := filepath.Join(l.home, "profiles")
 	entries, err := os.ReadDir(profiles)
@@ -295,15 +324,22 @@ func (l *launcher) speaksMaoTa() bool {
 
 func (l *launcher) stop() {
 	l.mu.Lock()
-	cmd := l.cmd
-	l.stopped = true
-	l.mu.Unlock()
-	if cmd == nil || cmd.Process == nil {
+	if l.stopped {
+		l.mu.Unlock()
 		return
 	}
-	kill := exec.Command("taskkill", "/PID", strconv.Itoa(cmd.Process.Pid), "/T", "/F")
-	kill.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-	if err := kill.Run(); err != nil {
+	l.stopped = true
+	cmd := l.cmd
+	gone := l.gone
+	l.mu.Unlock()
+	if !needsKill(cmd, gone) {
+		return
+	}
+	kill := l.killer
+	if kill == nil {
+		kill = killTree
+	}
+	if err := kill(cmd.Process.Pid); err != nil {
 		l.logger.Println("taskkill:", err)
 	}
 	deadline := time.Now().Add(killTimeout)

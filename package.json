@@ -55,6 +55,9 @@
     "pwsh-local:smoke": "node packages/shell/pwsh-local/tests/pwsh-local.smoke.ts",
     "shell:smoke": "node packages/shell/shell/tests/shell.smoke.ts",
     "config:smoke": "node packages/boot/app-boot/tests/config.smoke.ts",
+    "plugin-host:smoke": "node packages/boot/plugin-host/tests/host.smoke.ts",
+    "runtime:smoke": "node packages/boot/runtime/tests/runtime.smoke.ts",
+    "boot:cost": "node scripts/tests/boot-cost.ts",
     "hmr:smoke": "node scripts/tests/hmr.smoke.ts",
     "i18n:write": "node docs/i18n.check.ts --write",
     "runner:smoke": "node packages/agent/agent-runner/tests/runner.smoke.ts",
@@ -69,7 +72,8 @@
     "web:build": "pnpm -C apps/web build",
     "web:smoke": "node apps/web/tests/web.smoke.ts",
     "release:bump": "node scripts/release/bump.ts",
-    "pack:all": "pnpm build && pnpm web:build && node scripts/release/pack.ts"
+    "pack:all": "pnpm build && pnpm web:build && node scripts/release/pack.ts",
+    "desktop:pack": "node scripts/release/desktop.ts"
   },
   "dependencies": {
     "typescript": "^7.0.2"
@@ -78,6 +82,7 @@
     "@maota/hook-protocol": "workspace:*",
     "@maota/host": "workspace:*",
     "@maota/plugin-kit": "workspace:*",
+    "@maota/runtime": "workspace:*",
     "@types/node": "^22.20.2",
     "@virgena/blmoadll": "^0.1.0",
     "tsdown": "^0.23.0"

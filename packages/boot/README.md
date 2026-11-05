@@ -27,6 +27,7 @@ The CLI composes the first two. `hmr` is the group's one plugin, the kernel moun
 |---|---|
 | [`app-boot`](app-boot/README.md) | Resolves the config file and the kernel binary for one launch, and generates the config file in `$MAOTA_HOME/profiles/<name>` on a first run. |
 | [`host`](host/README.md) | Spawns the kernel, then invokes, streams, subscribes and shuts down over its stdio protocol. |
+| [`plugin-host`](plugin-host/README.md) | The one process that hosts every eligible Node plugin: loading, frame tagging, and the crash reports the kernel supervises. |
 | [`hmr`](hmr/README.md) | Watches the configured roots and publishes `dev.source.changed`, so a host can restart the plugins that import a changed file. |
 
 <a id="related-documentation"></a>

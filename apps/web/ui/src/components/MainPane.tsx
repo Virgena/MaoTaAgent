@@ -4,7 +4,9 @@
 
 import { useT } from "../lib/i18n.ts";
 import type { AppInfo, Approval, ContextView, ModelRoute, SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import type { HostStatus } from "../lib/rpc.ts";
 import { ChatView } from "./ChatView.tsx";
+import { HostStatusStrip } from "./HostStatusStrip.tsx";
 import type { LiveTurn } from "./MessageList.tsx";
 import { PluginsView } from "./PluginsView.tsx";
 import { SearchPalette } from "./SearchPalette.tsx";
@@ -14,6 +16,7 @@ export function MainPane({
   page,
   info,
   kernelError,
+  hostStatus,
   project,
   projects,
   sessions,
@@ -49,6 +52,7 @@ export function MainPane({
   page: "chat" | "plugins" | "tasks";
   info: AppInfo | null;
   kernelError: string | null;
+  hostStatus: HostStatus | null;
   project: string;
   projects: string[];
   sessions: SessionSummary[];
@@ -87,6 +91,7 @@ export function MainPane({
 
   return (
     <>
+      <HostStatusStrip status={hostStatus} />
       {page === "tasks" ? (
         <TasksView session={active} />
       ) : page === "plugins" ? (
