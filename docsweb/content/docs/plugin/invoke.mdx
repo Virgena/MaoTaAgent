@@ -1,0 +1,127 @@
+---
+title: 处理调用
+description: 接收 invoke、读取参数、返回结果，以及流式调用的入口
+---
+
+**读者**：已经完成握手，准备实现业务方法的人。
+
+**结论**：`invoke` 是一次普通请求。用同一个 id 回复结果即可。流式调用只多做一件事：先回复 `{stream_id}`，再发 chunk。
+
+## invoke 参数
+
+```json
+{
+  "capability": "demo.text",
+  "method": "chat",
+  "params": {"prompt": "hi"},
+  "meta": {
+    "caller": "host",
+    "request_id": 12,
+    "timeout_ms": 30000,
+    "stream": false
+  }
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `capability` | 被调用的能力 ID，应该是你声明提供的之一 |
+| `method` | 该能力下的方法名，例如 `chat` |
+| `params` | 调用方提供的参数，内容由你和调用方约定 |
+| `meta.caller` | 调用方标签，插件 id 或 `"host"` |
+| `meta.request_id` | 内核分配的调用编号，是数字 |
+| `meta.timeout_ms` | 内核已经设置的超时 |
+| `meta.stream` | 为 true 表示流式调用 |
+
+`meta.request_id` 是数字，用于匹配 `$/cancel`。不要把它和反向调用时的字符串 `request_id` 混淆。
+
+## 返回结果
+
+普通调用直接返回业务结果：
+
+```json
+{"jsonrpc":"2.0","id":12,"result":{"text":"hi"}}
+```
+
+`result` 可以是任意 JSON，内核原样转给调用方。
+
+处理逻辑通常按 `capability` 和 `method` 分发：
+
+```ts
+function handleInvoke(id: number, params: any): void {
+  const { capability, method } = params;
+
+  if (capability === "demo.text" && method === "chat") {
+    send({ jsonrpc: "2.0", id, result: { text: `echo: ${params.params?.prompt ?? ""}` } });
+    return;
+  }
+
+  send({ jsonrpc: "2.0", id,
+         error: { code: -32601, message: `unknown ${capability}/${method}` } });
+}
+```
+
+## 流式调用
+
+当 `meta.stream` 为 true 时，结果必须是：
+
+```json
+{"jsonrpc":"2.0","id":12,"result":{"stream_id":"s-1"}}
+```
+
+这个回复必须先发。内核根据它建立流映射。之后再发 `$/stream/chunk` 和终结 chunk。
+
+完整规则见[流式输出](/docs/plugin/streams)。
+
+## 注册表调用
+
+如果调用的是某个 service 的 `register` 或 `unregister` 方法，内核会额外写入：
+
+```json
+"meta": {
+  "authorized_registration": {"service": "demo.registry", "capability": "demo.text"}
+}
+```
+
+这是内核在匹配调用方的 `registrations` 声明后写入的。注册表实现应当使用这个标记，不要信任调用方自报的 owner 或过期的路由快照。
+
+## 返回错误
+
+```json
+{"jsonrpc":"2.0","id":12,
+ "error":{"code":-32603,"message":"boom","data":{}}}
+```
+
+常用错误码：
+
+| code | 何时使用 |
+|---|---|
+| -32601 | 不认识的方法 |
+| -32602 | 参数缺失或无效 |
+| -32603 | 插件内部错误 |
+
+内核侧的错误码见[错误码](/docs/blmoadll/errors)。
+
+## 超时与取消
+
+- `meta.timeout_ms` 是内核已经设置好的超时。
+- 超时后调用方收到 -32012，你会收到 `$/cancel{request_id: <数字>}`。
+- 收到取消后应尽快停止工作并停止发送 chunk。
+- 取消是协作式的，内核无法强制你停止。
+
+流式取消还有额外规则，见[流式输出](/docs/plugin/streams)。
+
+## 并发
+
+内核限制每个插件的在途调用数，默认 `max_inflight = 64`。超过上限时新调用直接得到 -32019，不会排队。
+
+插件应当自行控制并发，或让调用快速失败。不要假设内核会替你排队。
+
+## 调用不会到达的情况
+
+- `start` 之前不会有 `invoke`。
+- 能力不在路由表里时，调用方得到 -32010，不会到达你。
+- 你的进程已退出时，调用方得到 -32011。
+- 你尚未 `start` 时，调用方得到 -32014。
+
+这些错误由内核产生，不需要插件处理。

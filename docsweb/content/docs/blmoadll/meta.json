@@ -1,0 +1,20 @@
+{
+  "title": "内核",
+  "description": "blmoadll 内核的职责、配置、路由与运行形态",
+  "root": true,
+  "pages": [
+    "---开始---",
+    "index",
+    "process",
+    "config",
+    "---运行时---",
+    "routing",
+    "events",
+    "limits",
+    "errors",
+    "---宿主与形态---",
+    "host",
+    "shared-host",
+    "runtime"
+  ]
+}

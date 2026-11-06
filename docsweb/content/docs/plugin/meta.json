@@ -1,0 +1,19 @@
+{
+  "title": "插件",
+  "description": "编写、调试和发布 blmoadll 插件",
+  "root": true,
+  "pages": [
+    "---开始---",
+    "index",
+    "checklist",
+    "---协议---",
+    "connect",
+    "lifecycle",
+    "invoke",
+    "capabilities",
+    "streams",
+    "events",
+    "terminal",
+    "logging"
+  ]
+}

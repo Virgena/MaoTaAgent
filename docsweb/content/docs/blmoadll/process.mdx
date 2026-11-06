@@ -1,0 +1,158 @@
+---
+title: 进程与生命周期
+description: 内核如何启动、排序、监督和关闭插件进程
+---
+
+**读者**：维护内核、排查启动失败或退出异常的人。
+
+**结论**：插件生命周期固定为 `initialize`、`start`、工作、`shutdown` 四段。内核负责排序和监督，插件负责在每一步应答。
+
+## 启动顺序
+
+<figure className="not-prose my-8 rounded-xl border border-fd-border/60 bg-fd-card/40 px-4 py-6 sm:px-8 sm:py-8">
+  <figcaption className="mb-7 text-center text-[11px] leading-relaxed text-fd-muted-foreground">
+    启动、工作与关闭的全过程。实线为内核发起，虚线为插件回复。
+  </figcaption>
+  <div className="mx-auto max-w-xl">
+    <div className="relative mb-7 h-10">
+      <div className="absolute left-[12%] top-0 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-fd-primary" />
+        <span className="text-[11px] font-semibold text-fd-foreground">内核</span>
+      </div>
+      <div className="absolute left-[88%] top-0 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full border border-fd-muted-foreground/60" />
+        <span className="text-[11px] font-semibold text-fd-foreground">插件</span>
+      </div>
+    </div>
+    <div className="relative">
+      <span aria-hidden="true" className="absolute bottom-0 left-[12%] top-0 w-px bg-fd-border/60" />
+      <span aria-hidden="true" className="absolute bottom-0 right-[12%] top-0 w-px bg-fd-border/60" />
+      <div className="relative">
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">spawn</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">initialize</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] text-fd-muted-foreground">声明</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-dashed border-fd-muted-foreground/50" />
+          <span aria-hidden="true" className="absolute left-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-r-[6px] border-y-transparent border-r-fd-muted-foreground/50" />
+        </div>
+        <div className="relative py-4">
+          <div className="mx-auto max-w-[85%] rounded-md border border-dashed border-fd-border bg-fd-background/80 px-3 py-2 text-center text-[11px] leading-relaxed text-fd-muted-foreground">
+            内核校验依赖图并计算启动顺序
+          </div>
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">start</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] text-fd-muted-foreground">{"{}"}</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-dashed border-fd-muted-foreground/50" />
+          <span aria-hidden="true" className="absolute left-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-r-[6px] border-y-transparent border-r-fd-muted-foreground/50" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">invoke 与通知</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute left-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-r-[6px] border-y-transparent border-r-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">shutdown</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] text-fd-muted-foreground">{"{}"}</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-dashed border-fd-muted-foreground/50" />
+          <span aria-hidden="true" className="absolute left-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-r-[6px] border-y-transparent border-r-fd-muted-foreground/50" />
+        </div>
+        <div className="relative h-8">
+          <div className="absolute inset-x-[12%] top-1 text-center text-[11px] text-fd-muted-foreground">插件退出</div>
+          <span aria-hidden="true" className="absolute left-[88%] top-3 h-2 w-2 -translate-x-1/2 rounded-sm bg-fd-muted-foreground/40" />
+        </div>
+        <div className="relative py-3">
+          <div className="mx-auto max-w-[85%] rounded-md border border-dashed border-fd-border bg-fd-background/80 px-3 py-2 text-center text-[11px] leading-relaxed text-fd-muted-foreground">
+            内核等待 shutdown_grace_ms，超时强杀
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+顺序固定，不能跳过：
+
+1. 内核 spawn 插件，等待 `initialize` 回复。
+2. 内核收集所有插件的 `provides`、`injects`、`registrations`，校验依赖图。
+3. 依赖就绪后，内核按拓扑顺序发送 `start`。
+4. 正常调用阶段，内核只发 `invoke` 和各类通知。
+5. 关闭时发送 `shutdown`，等待插件自行退出。
+
+`initialize` 之前没有调用，`start` 之前也没有调用。内核在路由表存在之前不会发 `invoke`。
+
+## 启动失败
+
+以下情况会让整个内核启动失败，退出码为 1：
+
+- 配置文件不可读，或可读但无法解析。
+- 插件进程无法 spawn。
+- `initialize` 超时，或回复缺少必需的声明数组。
+- 协定的 `protocol` 不是 3。
+- 必需依赖无人提供，或依赖图有环。
+- 必需的注册 service 无人提供。
+
+`--check` 模式会执行同样的启动检查，但不发送 `start`，不碰 io，也不产生生命周期事件。
+
+## 插件崩溃
+
+插件在 `initialize` 之后、内核要求它关闭之前自行退出，算作崩溃。内核会：
+
+1. 所有等待该插件回复的调用立即得到 -32011，`error.data` 为 `{plugin, exit_code, signal}`。
+2. 该插件作为提供方的流被终止，调用方收到 -32011 的 `$/stream/error`。
+3. 该插件作为调用方的流被清理。
+4. 先发布 `kernel.plugin.degraded`，再发布 `kernel.plugin.stopped`，`reason` 为 `"crash"`。
+5. 保留它的能力槽。之后对相关能力的调用仍然得到 -32011，不会静默改路到别的插件。
+
+一个插件崩溃不会让内核退出，其他插件继续运行。
+
+## 内核退出码
+
+| 退出码 | 含义 |
+|---|---|
+| 0 | 干净退出：所有插件在宽限期内自行退出，没有遗留调用 |
+| 1 | 无法启动：配置不可读、不可解析或插件图无效 |
+| 2 | 有插件被强杀，或有调用未能在 `drain_ms` 内完成 |
+
+退出码为 1 时，stderr 上总会有一行 JSON 报告，字段包括 `ok`、`errors`、`warnings`、`plugins` 和 `capabilities`。
+
+## 统一关闭
+
+1. **排空**：等待在途调用完成。没有在途调用，并且安静了 `io_eof_idle_ms`（默认 500），或 `drain_ms`（默认 5000）用完。
+2. 向每个插件发送 `shutdown{reason}`。
+3. 等待 `shutdown_grace_ms`（默认取所有插件中的最大值，默认值 5000）。
+4. 强杀剩余进程，内核退出。
+
+插件收到 `shutdown` 后大约有 5 秒。应当立即刷盘、关闭连接，不要再接新工作。
+
+## 重载与重启
+
+热重载替换路由表，但内核本身不重启。新增或变化的插件重新走 `initialize` 和 `start`；被替换的插件先排空，再收到 `shutdown{reason:"reload"}`。
+
+宿主发起的 `restart` 是**先停后起**：
+
+1. 旧实例通过 `shutdown{reason:"reload"}` 退出。
+2. 超过该插件的 `shutdown_grace_ms` 仍未退出就强杀；仍然无法停止时，重启以 -32011 被拒绝。
+3. 新实例走完整拉起流程：spawn、`initialize`、校验整张图、换表、`start`。
+4. 成功后发布新的 `kernel.capabilities.changed`。
+
+先停后起是为了避免端口等独占资源冲突。例如 web 插件默认绑定 8341，先起新实例会直接遇到 EADDRINUSE。
+
+重载的细节见[能力与路由](/docs/blmoadll/routing)和[事件总线](/docs/blmoadll/events)。

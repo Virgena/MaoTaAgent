@@ -1,0 +1,155 @@
+---
+title: 流式输出
+description: 作为提供方推送 chunk，作为调用方消费流，以及背压、心跳和取消
+---
+
+**读者**：需要返回长结果、进度或多个分片的插件作者。
+
+**结论**：流不是新连接，而是同一管道上的一系列通知。提供方必须先回复 `{stream_id}`，再发 chunk，最后发一个终结 chunk。
+
+## 作为提供方
+
+当 `invoke` 的 `meta.stream` 为 true 时：
+
+### 1. 先回复 stream id
+
+```json
+{"jsonrpc":"2.0","id":12,"result":{"stream_id":"s-1"}}
+```
+
+这一步不能跳过，也不能推迟。内核根据这个回复建立 `(你, stream_id)` 到调用方流的映射。在此之前发送的 chunk 会作为孤儿被丢弃，并记一条警告。
+
+`stream_id` 只需要在你自己的管道上唯一。内核会负责跨插件重命名。
+
+### 2. 发送 chunk
+
+```json
+{"method":"$/stream/chunk",
+ "params":{"stream_id":"s-1","seq":0,"data":{"delta":"hel"},"done":false}}
+```
+
+- `seq` 由你递增。内核不使用这个值，调用方看到的是内核重新编号后的 `seq`。
+- `data` 可以是任意 JSON。
+- `done` 为 false。
+
+### 3. 发送终结 chunk
+
+```json
+{"method":"$/stream/chunk",
+ "params":{"stream_id":"s-1","seq":1,"data":null,"done":true}}
+```
+
+终结 chunk 必须满足：
+
+- `done: true`。
+- `data` 为 null。带载荷的终结 chunk 会记警告，载荷被丢弃。
+- 每条流只有一个终结信号。
+
+### 4. 或者发送错误
+
+```json
+{"method":"$/stream/error",
+ "params":{"stream_id":"s-1","code":-32603,"message":"boom","data":{}}}
+```
+
+`$/stream/error` 也是终结信号，不能再跟 chunk。
+
+## 心跳
+
+流超过 `stream_idle_timeout_ms`（默认 30000）没有 chunk，会被终止：
+
+- 调用方收到 -32012。
+- 你收到 `$/cancel`。
+
+长任务必须发送心跳。心跳可以是一个空 chunk：
+
+```json
+{"method":"$/stream/chunk",
+ "params":{"stream_id":"s-1","seq":1,"data":null,"done":false}}
+```
+
+`data` 可以为 null，但 `done` 必须为 false。
+
+## 作为调用方
+
+发起流式调用：
+
+```json
+{"jsonrpc":"2.0","id":"r-1","method":"kernel.invoke",
+ "params":{"capability":"demo.text","method":"chat","params":{},
+           "meta":{"request_id":"r-1","stream":true}}}
+```
+
+回复是：
+
+```json
+{"jsonrpc":"2.0","id":"r-1","result":{"stream_id":"f-3"}}
+```
+
+然后接收：
+
+```json
+{"method":"$/stream/chunk","params":{"stream_id":"f-3","seq":0,"data":{"delta":"c0"},"done":false}}
+{"method":"$/stream/chunk","params":{"stream_id":"f-3","seq":1,"data":null,"done":true}}
+```
+
+要点：
+
+- `stream_id` 是内核生成的 `f-N`。
+- `seq` 由内核从 0 重新编号，提供方的 seq 不会传过来。
+- 终结信号只有一个：`done:true` 或 `$/stream/error`。
+- 可以提前放弃：发送 `$/cancel{stream_id: "f-3"}`。
+
+## 背压
+
+调用方的出站队列超过 `queue_high_water_bytes`（默认 2 MiB）时：
+
+1. chunk 不再直接发出，先扣在内核里。
+2. 队列降到 `queue_low_water_bytes`（默认 1 MiB）以下才放行。
+3. 清理大约每 100 ms 跑一次，不是零延迟。
+
+扣留有硬上限：
+
+- `stream_buffer_chunks`，默认 4096 个 chunk。
+- `stream_buffer_bytes`，默认 8 MiB。
+
+超过任一上限时：
+
+- 流被终止。
+- 调用方收到 -32019 的 `$/stream/error`。
+- 提供方应停止发送。
+
+慢读者也会被 -32019 终止。宿主队列使用相同的 watermark。
+
+提供方不能假设对面收到了全部数据。高速长流要么接受被终止，要么实现分页或拉取式接口。
+
+## 取消
+
+取消自己发起的流：
+
+```json
+{"jsonrpc":"2.0","method":"$/cancel","params":{"stream_id":"f-3"}}
+```
+
+内核取消你时，你会收到：
+
+```json
+{"jsonrpc":"2.0","method":"$/cancel","params":{"request_id":12}}
+```
+
+规则：
+
+- 取消是协作式的，内核只能停止转发并转告提供方。
+- 收到取消后尽快收尾，停止发送 chunk。
+- 取消后没有终结帧，既没有 `done:true`，也没有 `$/stream/error`。
+- 发往已死流的 chunk 会被丢弃，并记 debug 日志。
+
+## id 命名空间
+
+| 前缀 | 生成者 | 用途 |
+|---|---|---|
+| `f-N` | 内核 | 调用方的 stream_id |
+| `sub-N` | 内核 | 订阅 id |
+| `host-N` | 内核 | 宿主发起的调用 |
+
+插件自己的 stream_id 完全自由，只需要在本管道内唯一。不要模仿上面的前缀。

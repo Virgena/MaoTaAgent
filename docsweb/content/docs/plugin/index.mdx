@@ -1,0 +1,188 @@
+---
+title: 编写第一个插件
+description: 从零写一个能加载、应答调用并干净退出的 Node 插件
+---
+
+**读者**：要用 TypeScript 或 Node 写 blmoadll 插件的人。
+
+**结论**：插件就是一个普通子进程。它在 fd 0 上读帧、在 fd 1 上写帧，按 JSON-RPC 应答 `initialize`、`start`、`invoke` 和 `shutdown`，就这些。
+
+## 最小插件
+
+```ts
+#!/usr/bin/env node
+// 一个用 Node 写的 blmoadll 插件。
+import { writeSync } from "node:fs";
+
+const provides = ["demo.text"];
+const injects: { capability: string; optional?: boolean }[] = [];
+const registrations: { service: string; capability: string }[] = [];
+const host_calls: string[] = [];
+
+function send(message: unknown): void {
+  const body = Buffer.from(JSON.stringify(message), "utf8");
+  writeSync(1, `Content-Length: ${body.length}\r\n\r\n`);
+  writeSync(1, body);
+}
+
+function chunk(streamId: string, seq: number, data: unknown, done: boolean): void {
+  send({ jsonrpc: "2.0", method: "$/stream/chunk",
+         params: { stream_id: streamId, seq, data, done } });
+}
+
+let buffer = Buffer.alloc(0);
+
+process.stdin.on("data", (incoming: Buffer) => {
+  buffer = Buffer.concat([buffer, incoming]);
+  for (;;) {
+    const split = buffer.indexOf("\r\n\r\n");
+    if (split < 0) return;
+    const match = /content-length:\s*(\d+)/i.exec(
+      buffer.subarray(0, split).toString("latin1"));
+    if (!match) throw new Error("missing Content-Length");
+    const length = Number(match[1]);
+    if (buffer.length < split + 4 + length) return;
+    const payload = buffer.subarray(split + 4, split + 4 + length);
+    buffer = buffer.subarray(split + 4 + length);
+    handle(JSON.parse(payload.toString("utf8")));
+  }
+});
+
+// 内核关闭 stdin 或要求 shutdown 时，干净离开。
+process.stdin.on("end", () => process.exit(0));
+
+function handle(message: any): void {
+  const { id, method, params } = message;
+  if (method === undefined) return;                 // 一个响应
+  if (id === undefined || id === null) return;      // 一个通知，不需要回复
+
+  switch (method) {
+    case "initialize":
+      send({ jsonrpc: "2.0", id,
+             result: { protocol: 3, provides, injects, registrations, host_calls } });
+      return;
+
+    case "start":
+      // params.capabilities 是整张路由表的快照。
+      send({ jsonrpc: "2.0", id, result: {} });
+      return;
+
+    case "invoke": {
+      if (params?.meta?.stream !== true) {
+        send({ jsonrpc: "2.0", id, result: { echo: params?.params ?? null } });
+        return;
+      }
+      // 流式：stream_id 必须先回复，再发 chunk。
+      const streamId = `s-${id}`;
+      send({ jsonrpc: "2.0", id, result: { stream_id: streamId } });
+      for (let n = 0; n < 3; n += 1) {
+        chunk(streamId, n, { delta: `chunk ${n}` }, false);
+      }
+      chunk(streamId, 3, null, true);
+      return;
+    }
+
+    case "shutdown":
+      // 所有 reason 一视同仁：收尾、回复、退出。
+      send({ jsonrpc: "2.0", id, result: {} });
+      process.exit(0);
+
+    default:
+      send({ jsonrpc: "2.0", id,
+             error: { code: -32601, message: `no ${method} here` } });
+  }
+}
+```
+
+## 注册到内核
+
+```toml
+[plugins.demo]
+command = "node"
+args = ["minimal-plugin.mjs"]
+```
+
+把插件文件和配置放在同一目录，然后运行：
+
+```text
+blmoadll blmoadll.toml
+```
+
+内核会启动这个进程，执行 `initialize` 和 `start`，之后才把调用路由过来。
+
+## 生命周期
+
+<div className="not-prose my-8">
+  <div className="flex gap-4 pb-7">
+    <div className="flex flex-col items-center">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-fd-primary/40 bg-fd-primary/5 font-mono text-[11px] font-semibold text-fd-primary">1</span>
+      <span className="mt-2 w-px flex-1 bg-fd-border/70" />
+    </div>
+    <div className="min-w-0 pt-0.5">
+      <code className="font-mono text-sm font-semibold text-fd-foreground">initialize</code>
+      <p className="mt-1 text-sm leading-relaxed text-fd-muted-foreground">内核发来启动参数，你回复四项声明。</p>
+    </div>
+  </div>
+  <div className="flex gap-4 pb-7">
+    <div className="flex flex-col items-center">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-fd-primary/40 bg-fd-primary/5 font-mono text-[11px] font-semibold text-fd-primary">2</span>
+      <span className="mt-2 w-px flex-1 bg-fd-border/70" />
+    </div>
+    <div className="min-w-0 pt-0.5">
+      <code className="font-mono text-sm font-semibold text-fd-foreground">start</code>
+      <p className="mt-1 text-sm leading-relaxed text-fd-muted-foreground">内核发来路由表快照，你回复 <code className="font-mono text-xs">{"{}"}</code>。</p>
+    </div>
+  </div>
+  <div className="flex gap-4 pb-7">
+    <div className="flex flex-col items-center">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-fd-primary/40 bg-fd-primary/5 font-mono text-[11px] font-semibold text-fd-primary">3</span>
+      <span className="mt-2 w-px flex-1 bg-fd-border/70" />
+    </div>
+    <div className="min-w-0 pt-0.5">
+      <code className="font-mono text-sm font-semibold text-fd-foreground">invoke</code>
+      <p className="mt-1 text-sm leading-relaxed text-fd-muted-foreground">内核发来调用，你返回结果或 <code className="font-mono text-xs">stream_id</code>。</p>
+    </div>
+  </div>
+  <div className="flex gap-4">
+    <div className="flex flex-col items-center">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-fd-primary/40 bg-fd-primary/5 font-mono text-[11px] font-semibold text-fd-primary">4</span>
+    </div>
+    <div className="min-w-0 pt-0.5">
+      <code className="font-mono text-sm font-semibold text-fd-foreground">shutdown</code>
+      <p className="mt-1 text-sm leading-relaxed text-fd-muted-foreground">内核要求关闭，你回复 <code className="font-mono text-xs">{"{}"}</code> 并退出。</p>
+    </div>
+  </div>
+</div>
+
+四个步骤的细节见[初始化与关闭](/docs/plugin/lifecycle)。
+
+## 三个必须避免的错误
+
+**不要往 stdout 写任何非帧内容。** `console.log`、`printf`、进度条、依赖的横幅都会破坏协议。日志写到 stderr 或 `kernel.log`。
+
+**不要在 `shutdown` 之前自行退出。** 在 `initialize` 之后、内核要求关闭之前退出，会被当作崩溃，能力槽变为不可用。
+
+**流式回复必须先发 `{stream_id}`。** 先发 chunk 再发 stream id，chunk 会作为孤儿被丢弃。
+
+## 接着读什么
+
+<Cards>
+  <Card title="连接与分帧" href="/docs/plugin/connect">
+    帧格式、JSON-RPC 信封和 id 规则。
+  </Card>
+  <Card title="初始化与关闭" href="/docs/plugin/lifecycle">
+    四项声明、配置读取和关闭行为。
+  </Card>
+  <Card title="处理调用" href="/docs/plugin/invoke">
+    接收 invoke，返回结果。
+  </Card>
+  <Card title="流式输出" href="/docs/plugin/streams">
+    推送 chunk、心跳和背压。
+  </Card>
+  <Card title="发布前自检" href="/docs/plugin/checklist">
+    一份逐项检查清单。
+  </Card>
+  <Card title="内核文档" href="/docs/blmoadll">
+    需要了解内核内部行为时再读。
+  </Card>
+</Cards>

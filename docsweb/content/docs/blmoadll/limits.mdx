@@ -1,0 +1,68 @@
+---
+title: 上限与超时
+description: 内核强制的每一项上限、默认值和配置位置
+---
+
+**读者**：调整内核参数、排查超时、过载或内存增长的人。
+
+**结论**：所有上限都放在 `[kernel]` 表，字段名与下表一致。插件可以在 `[plugins.<id>]` 下覆盖其中几项。
+
+## 内核级上限
+
+| 字段 | 默认值 | 作用 |
+|---|---|---|
+| `max_frame_bytes` | 64 MiB | 帧正文上限，超过为 -32016 |
+| `initialize_timeout_ms` | 5000 | 等待 `initialize` 回复 |
+| `start_timeout_ms` | 10000 | 等待 `start` 回复 |
+| `shutdown_grace_ms` | 5000 | `shutdown` 后等待插件退出 |
+| `request_timeout_ms` | 30000 | 一次普通能力调用的超时 |
+| `stream_idle_timeout_ms` | 30000 | 流允许多久没有 chunk |
+| `event_payload_bytes` | 256 KiB | `kernel.publish` 载荷上限，也是 `kernel.write` 单次写入上限 |
+| `event_queue_len` | 1024 | 每个订阅的条数预算 |
+| `event_queue_bytes` | 4 MiB | 每个订阅的字节预算 |
+| `outbound_queue_bytes` | 4 MiB | 发往单个插件的出站队列上限 |
+| `io_write_queue_bytes` | 4 MiB | 内核 stdout 队列上限 |
+| `queue_high_water_bytes` | 2 MiB | 上水位，超过后流 chunk 被扣留 |
+| `queue_low_water_bytes` | 1 MiB | 下水位，降到它以下才放行 |
+| `stream_buffer_chunks` | 4096 | 单条流扣留的 chunk 上限 |
+| `stream_buffer_bytes` | 8 MiB | 单条流扣留的字节上限 |
+| `max_inflight` | 64 | 每个插件的在途调用数 |
+| `max_inflight_total` | 1024 | 全局在途调用数 |
+| `drain_ms` | 5000 | 关闭时等待在途调用的预算 |
+| `io_eof_idle_ms` | 500 | 关闭时需安静多久才算完成 |
+| `max_plugins` | 64 | 插件数量上限 |
+| `log_line_bytes` | 8 KiB | 日志行截断长度，也是单条插件 stderr 行的上限 |
+| `io_line_bytes` | 8 KiB | 每次读取 stdin 的读取大小 |
+
+## 插件级覆盖
+
+插件可以在自己的行下覆盖这些值：
+
+| 字段 | 覆盖什么 |
+|---|---|
+| `initialize_timeout_ms` | `initialize` 超时 |
+| `start_timeout_ms` | `start` 超时 |
+| `shutdown_grace_ms` | 退出宽限期 |
+| `request_timeout_ms` | 别人调用这个插件时的默认超时 |
+| `stream_idle_timeout_ms` | 该插件提供的流的空闲超时 |
+| `max_inflight` | 别人可以同时对它有多少在途调用 |
+
+## 超时发生之后
+
+| 超时 | 调用方看到 | 提供方看到 |
+|---|---|---|
+| `initialize` | 启动失败，退出码 1 | 进程被清理 |
+| `start` | 启动失败，退出码 1 | 进程被清理 |
+| `request_timeout_ms` | -32012 | `$/cancel` |
+| `stream_idle_timeout_ms` | -32012，流被终止 | `$/cancel` |
+| `shutdown_grace_ms` | 内核退出码 2 | 进程被强杀 |
+
+## 背压相关上限
+
+流式场景有三个层次：
+
+1. 出站队列超过 `queue_high_water_bytes`，chunk 被扣留。
+2. 扣留量超过 `stream_buffer_chunks` 或 `stream_buffer_bytes`，流被终止，调用方收到 -32019。
+3. 宿主队列使用相同的 watermark，读得慢的宿主同样会被限流。
+
+细节见[流式输出](/docs/plugin/streams)。

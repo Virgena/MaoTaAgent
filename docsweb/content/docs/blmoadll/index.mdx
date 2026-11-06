@@ -1,0 +1,70 @@
+---
+title: 内核概览
+description: blmoadll 内核负责什么、不负责什么，以及这套文档怎么读
+---
+
+**读者**：需要运行、维护或理解 blmoadll 内核的人。只想写插件的人，从[编写第一个插件](/docs/plugin)开始读。
+
+**结论**：内核是一个插件进程管理器。它只做四件事：加载插件、卸载插件、按依赖排序、在能力调用和事件之间转发消息。它不理解模型、会话、工具或 UI，也不关心插件用什么语言写。
+
+## 内核负责什么
+
+| 内核负责 | 内核不负责 |
+|---|---|
+| 按配置启动和停止插件进程 | 插件内部的业务逻辑 |
+| 收集插件声明，校验依赖图并计算启动顺序 | 模型、会话、工具、UI 等概念 |
+| 维护能力表，把调用路由到唯一的提供方 | 插件之间的协议之外的数据格式 |
+| 转发事件、流、取消和终端 io | 自动重试或故障转移 |
+| 监督进程退出，处理崩溃和统一关闭 | 替代插件实现业务级的高可用 |
+
+内核的唯一接口是 JSON-RPC 分帧。插件侧协议见[插件](/docs/plugin)区，宿主如何启动和调用内核见[宿主协议](/docs/blmoadll/host)。
+
+## 三种运行形态
+
+同一份插件协议支持三种进程组织方式，插件本身感觉不到区别。
+
+1. **独立进程**：每个插件一个子进程，默认形态。
+2. **共享扩展宿主**：一个子进程承载所有符合条件的 Node 插件，见[共享扩展宿主](/docs/blmoadll/shared-host)。
+3. **Runtime**：内核只启动一个 Runtime 子进程，由它拥有全部插件，见 [Runtime](/docs/blmoadll/runtime)。
+
+## 文档地图
+
+<Cards>
+  <Card title="进程与生命周期" href="/docs/blmoadll/process">
+    启动顺序、崩溃处理、退出码和统一关闭。
+  </Card>
+  <Card title="配置与启动" href="/docs/blmoadll/config">
+    插件行、内核参数、配置分层和 --check。
+  </Card>
+  <Card title="能力与路由" href="/docs/blmoadll/routing">
+    能力表、依赖排序、等待状态和热重载。
+  </Card>
+  <Card title="事件总线" href="/docs/blmoadll/events">
+    主题匹配、投递预算和内核自己发布的事件。
+  </Card>
+  <Card title="宿主协议" href="/docs/blmoadll/host">
+    把内核作为子进程启动，并调用它的六个方法。
+  </Card>
+  <Card title="上限与错误" href="/docs/blmoadll/limits">
+    内核强制的上限、超时和错误码。
+  </Card>
+</Cards>
+
+## 术语
+
+| 术语 | 含义 |
+|---|---|
+| 插件 | 一个独立进程，通过 fd 0 / fd 1 与内核说 JSON-RPC |
+| 能力 | 一个不透明字符串，标识某类可调用功能，例如 `demo.text` |
+| 提供方 | 在 `initialize` 中声明 `provides` 的插件 |
+| 宿主 | 启动内核并向内核发起调用的进程，可以是编辑器或应用 |
+| 流 | 一次调用的多段返回，表现为同一管道上的一系列通知 |
+| 主题 | 事件的点分名称，例如 `kernel.plugin.started` |
+| Runtime | runtime 配置下内核唯一的子进程，拥有全部插件 |
+
+## 读这套文档的顺序
+
+1. 要部署或改配置：读[配置与启动](/docs/blmoadll/config)和[进程与生命周期](/docs/blmoadll/process)。
+2. 要写宿主：读[宿主协议](/docs/blmoadll/host)。
+3. 要改内核或排查协议问题：按需读路由、事件、上限和错误码。
+4. 要写插件：转到[插件](/docs/plugin)区，从[编写第一个插件](/docs/plugin)开始。

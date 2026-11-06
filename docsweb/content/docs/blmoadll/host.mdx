@@ -1,0 +1,226 @@
+---
+title: 宿主协议
+description: 把内核作为子进程启动，并调用它的六个方法
+---
+
+**读者**：要写宿主、编辑器或应用集成的人，例如 MaoTa 的 bridge。
+
+**结论**：宿主不链接内核，而是把它作为子进程启动，在它的 fd 0 / fd 1 上说同一套 JSON-RPC 分帧。向上看，内核只是一个插件形状的程序。
+
+## 启动内核
+
+```text
+blmoadll <config.toml> [--check] [--json]
+```
+
+这个可执行文件由 `--features host` 构建产出。默认构建只产出测试替身和库。
+
+宿主模式下的文件描述符：
+
+<figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border/70 bg-fd-card/50">
+  <figcaption className="flex items-center gap-2 border-b border-fd-border/60 px-5 py-3 text-xs font-medium text-fd-muted-foreground">
+    <span className="h-1.5 w-1.5 rounded-full bg-fd-primary" />
+    宿主与内核之间的三个通道
+  </figcaption>
+  <div className="divide-y divide-fd-border/50">
+    <div className="grid grid-cols-[4.5rem_1fr] items-start gap-4 px-5 py-4 sm:grid-cols-[6rem_1fr] sm:gap-6">
+      <div className="space-y-0.5">
+        <code className="block font-mono text-xs text-fd-foreground">fd 0</code>
+        <span className="block text-[10px] tracking-widest text-fd-muted-foreground/70">内核 stdin</span>
+      </div>
+      <div className="flex items-start gap-2.5 pt-0.5 text-sm leading-relaxed text-fd-muted-foreground">
+        <span aria-hidden="true" className="text-fd-primary">→</span>
+        <span>宿主发送的帧，也就是请求</span>
+      </div>
+    </div>
+    <div className="grid grid-cols-[4.5rem_1fr] items-start gap-4 px-5 py-4 sm:grid-cols-[6rem_1fr] sm:gap-6">
+      <div className="space-y-0.5">
+        <code className="block font-mono text-xs text-fd-foreground">fd 1</code>
+        <span className="block text-[10px] tracking-widest text-fd-muted-foreground/70">内核 stdout</span>
+      </div>
+      <div className="flex items-start gap-2.5 pt-0.5 text-sm leading-relaxed text-fd-muted-foreground">
+        <span aria-hidden="true" className="text-fd-primary">←</span>
+        <span>内核发送的帧，包括回复和通知</span>
+      </div>
+    </div>
+    <div className="grid grid-cols-[4.5rem_1fr] items-start gap-4 px-5 py-4 sm:grid-cols-[6rem_1fr] sm:gap-6">
+      <div className="space-y-0.5">
+        <code className="block font-mono text-xs text-fd-foreground">fd 2</code>
+        <span className="block text-[10px] tracking-widest text-fd-muted-foreground/70">内核 stderr</span>
+      </div>
+      <div className="flex items-start gap-2.5 pt-0.5 text-sm leading-relaxed text-fd-muted-foreground">
+        <span aria-hidden="true" className="text-fd-muted-foreground/60">→</span>
+        <span>日志，每行一个 JSON 对象</span>
+      </div>
+    </div>
+  </div>
+</figure>
+
+分帧规则与插件侧完全相同，见[连接与分帧](/docs/plugin/connect)。
+
+## 宿主可以发送的方法
+
+恰好这六个，其他方法返回 -32601：
+
+| 方法 | 参数 | 结果 |
+|---|---|---|
+| `invoke` | `capability`、`method`、`params`、可选 `meta.stream` | 提供方的结果；流式时为 `{stream_id}` |
+| `capabilities` | 无 | `{能力 id: {plugin}}` |
+| `subscribe` | `patterns`、可选 `replay` | `{subscription_id}` |
+| `unsubscribe` | `subscription_id` | `{}` |
+| `shutdown` | 可选 `reason` | `{}`，关闭在这一帧发出后开始 |
+| `restart` | `plugin`、可选 `reason` | `{}`；新实例起不来为 -32011，未知插件或 reason 为 -32602 |
+
+`restart` 的 `reason` 只能是 `source` 或 `manual`，默认 `manual`。它只决定事件的 `trigger`，插件看到的停止原因仍然是 `reload`。
+
+## 一次调用
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"invoke",
+ "params":{"capability":"demo.text","method":"echo","params":{"hi":1}}}
+{"jsonrpc":"2.0","id":1,"result":{"got":{"hi":1}}}
+```
+
+流式调用在 `meta` 里加 `{"stream":true}`：
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"invoke",
+ "params":{"capability":"demo.text","method":"chat","params":{},
+           "meta":{"stream":true}}}
+{"jsonrpc":"2.0","id":1,"result":{"stream_id":"f-3"}}
+```
+
+之后通过 `$/stream/chunk` 通知接收 chunk，`seq` 由内核重新编号。细节见[流式输出](/docs/plugin/streams)。
+
+宿主的 `meta` 里只读取 `stream`。`timeout_ms` 不会从宿主侧透传，需要精确超时的宿主请自己计时。
+
+## 订阅事件
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"subscribe",
+ "params":{"patterns":["kernel.plugin.*"],"replay":true}}
+```
+
+`replay: true` 会让内核补发当前存活插件和等待中插件的状态。主题匹配和投递预算见[事件总线](/docs/blmoadll/events)。
+
+## 取消流
+
+```json
+{"jsonrpc":"2.0","method":"$/cancel","params":{"stream_id":"f-3"}}
+```
+
+取消是静默的：
+
+- 内核停止转发，并把 `$/cancel` 转给提供方。
+- 不会再有终结帧，不要等 `done`。
+- 取消不存在的流是空操作，不报错。
+- 宿主通常拿 `stream_id`（`f-N`）。`request_id` 路径需要内核分配的 `host-N` 编号，很少使用。
+
+## 关闭
+
+```json
+{"jsonrpc":"2.0","id":9,"method":"shutdown","params":{"reason":"kernel_exit"}}
+```
+
+宿主只能给出两个 reason：
+
+- `ui_quit`：省略 `reason` 时的默认值。
+- `kernel_exit`：上游管道关闭或宿主退出。
+
+其他值返回 -32602，内核继续运行。插件看到的仍然是四种 reason 之一。
+
+内核回复 `{}` 后开始统一关闭。宿主也可以直接关闭 fd 0，内核会把 EOF 当作 `kernel_exit` 的关闭信号。
+
+## 宿主是纯调用方
+
+- 内核为宿主写入 `meta.caller = "host"`。
+- 宿主不提供能力，没有进程，不能成为路由目标。
+- 配置里写 `plugins.host` 会被拒绝。
+- 宿主发起的调用编号为 `host-N`。
+- 宿主受与插件相同的在途调用上限约束，超过为 -32019。
+
+## 终端归宿主
+
+内核的 fd 0 / fd 1 是宿主协议，fd 2 是日志。宿主模式下，内核没有终端可以给插件：
+
+- 宿主发送 `kernel.attach`、`kernel.detach`、`kernel.write` 都会得到 -32601。
+- 插件也无法 attach，内核会明确拒绝。
+- 当前版本没有把宿主键盘或 tty 透传给插件的通道。这是已知缺口。
+
+宿主自己的 stdin 和 Ctrl-C 属于宿主进程，内核看不到。
+
+## 退出与回收
+
+- 宿主发送 `shutdown`，内核回复 `{}`，执行统一关闭，然后退出。
+- 宿主关闭 fd 0，内核按 `kernel_exit` 处理并干净退出。
+- 退出码：0 干净，1 无法启动，2 有插件被强杀或调用未排空。
+- 退出码为 1 时，stderr 上有一行 JSON 报告，用 `ok` 字段识别。
+- 直接杀掉内核进程、绕过 shutdown，会留下插件子进程。回收是统一关闭的一部分。
+
+## 最小宿主
+
+```ts
+import { spawn } from "node:child_process";
+
+const kernel = spawn("blmoadll", ["./blmoadll.toml"], {
+  stdio: ["pipe", "pipe", "inherit"],
+});
+
+let buffer = Buffer.alloc(0);
+kernel.stdout.on("data", (chunk) => {
+  buffer = Buffer.concat([buffer, chunk]);
+  for (;;) {
+    const head = buffer.indexOf("\r\n\r\n");
+    if (head < 0) return;
+    const match = /content-length:\s*(\d+)/i.exec(
+      buffer.subarray(0, head).toString(),
+    );
+    const length = Number(match?.[1]);
+    if (!Number.isFinite(length) || buffer.length < head + 4 + length) return;
+    const body = buffer.subarray(head + 4, head + 4 + length);
+    buffer = buffer.subarray(head + 4 + length);
+    onFrame(JSON.parse(body.toString("utf8")));
+  }
+});
+
+function send(frame: unknown) {
+  const body = Buffer.from(JSON.stringify(frame), "utf8");
+  kernel.stdin.write(`Content-Length: ${body.length}\r\n\r\n`);
+  kernel.stdin.write(body);
+}
+
+let nextId = 0;
+const waiting = new Map<number, (reply: any) => void>();
+
+function request(method: string, params: unknown): Promise<any> {
+  const id = ++nextId;
+  return new Promise((resolve) => {
+    waiting.set(id, resolve);
+    send({ jsonrpc: "2.0", id, method, params });
+  });
+}
+
+function onFrame(frame: any) {
+  if (frame.id !== undefined) waiting.get(frame.id)?.(frame);
+  else dispatchNotification(frame);
+}
+```
+
+注意四点：
+
+- fd 2 使用 `inherit`，让内核日志进入宿主自己的 stderr。
+- 一个帧可能横跨多个 `data` 事件，多个帧也可能一次到达，必须缓冲到完整再解析。
+- 不要让内核继承宿主的 fd 0，使用 `["pipe", "pipe", "inherit"]`。
+- `shutdown` 之后不要复用内核进程，启动一个新的。
+
+## `--check` 报告
+
+`--check` 的报告写到 stdout，字段与启动失败时写到 stderr 的报告相同：
+
+- `ok`：是否通过。
+- `errors`：错误列表。
+- `warnings`：警告列表。
+- `plugins`：插件状态。
+- `capabilities`：能力表。
+
+`disabled` 行和等待中的插件只算警告，报告分别放在 `disabled` 和 `blocked`。`--json` 输出单行 JSON，方便宿主解析。

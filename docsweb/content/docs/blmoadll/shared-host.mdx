@@ -1,0 +1,75 @@
+---
+title: 共享扩展宿主
+description: 一个子进程承载所有 Node 插件，以及内核与它的控制面
+---
+
+**读者**：维护内核、Plugin Process 或部署形态的人。插件作者不需要读这一页。
+
+**结论**：共享扩展宿主让一个子进程承载多个 Node 插件，减少进程数量。面向插件的协议不变，插件感觉不到自己被托管。
+
+## 什么插件会被托管
+
+一个插件行满足以下条件时，会被放进共享宿主：
+
+- 实际 `command` 是 `node`。
+- 恰好带一个参数，即入口文件。
+- 没有自己的 `cwd`、`env` 或 `clear_env`。
+
+其他插件继续使用独立进程。两种形态可以并存在同一份配置里。
+
+## 配置行
+
+```toml
+[kernel]
+host_ping_ms = 2000
+host_restarts = 3
+host_restart_window_ms = 600000
+
+[kernel.host]
+command = "<node>"
+args = ["<...>/@maota/plugin-host/lib/index.js"]
+```
+
+## 管道
+
+宿主管道就是插件分帧，外加一个可选成员 `"plugin": "<id>"`：
+
+- 内核给发往被托管插件的每一帧加上 `plugin`。
+- 宿主在插件看到之前把它剥掉。
+- 插件发回的帧，宿主再加回 `plugin`。
+- 没有 `plugin` 的帧属于控制面。
+
+控制面归内核所有。插件不能访问控制面。在插件通道上收到 `$/host/*` 方法会得到 -32601。
+
+## 控制面方法
+
+| 方向 | 方法 | 参数 | 结果 |
+|---|---|---|---|
+| 内核到宿主 | `$/host/load` | `plugin`、`entry` | 模块求值完成且 `serve()` 接管后回复 `{}`；否则 -32022 |
+| 内核到宿主 | `$/host/unload` | `plugin`、`reason` | `close()` 完成后回复 `{}` |
+| 内核到宿主 | `$/host/kill` | `plugin` | `{}`，通道直接丢弃 |
+| 内核到宿主 | `$/host/ping` | 无 | `{pong: true}` |
+| 宿主到内核 | `$/host/loading` | `plugin` | 通知：一次 import 开始 |
+| 宿主到内核 | `$/host/exited` | `plugin`、`exit_code`、可选 `signal`、`killed` | 通知：该插件通道已关闭 |
+| 宿主到内核 | `$/host/failed` | `plugin`、`message`、`code` | 通知：加载失败 |
+| 宿主到内核 | `$/host/crash` | 可选 `plugin`、`error` | 通知：未捕获错误 |
+| 宿主到内核 | `$/host/stuck` | `plugin`、`stage` | 通知：close 未及时完成 |
+| 宿主到内核 | `$/host/fatal` | `message` | 通知：宿主无法继续，退出码 70 |
+
+`-32022` 是 `HOST_FAILED`，表示模块没有求值成功、从未启动插件，或在一次加载里尝试启动两次。
+
+## 监督
+
+内核把共享宿主当作一个插件形状的子进程，沿用同一套生命周期代码：
+
+- 宿主管道 EOF 会让所有被托管插件降级，发布 `kernel.host.exited`，并重启宿主。重启次数受 `host_restarts` 和 `host_restart_window_ms` 限制。
+- 加载期间崩溃时，归咎于最后一条 `$/host/loading` 点名的插件。两次命中会隔离该插件直到本次运行结束。隔离记录只在内存里，不落盘。
+- `$/host/ping` 无人应答视为挂起，内核杀掉宿主并走崩溃路径。
+- 聚合状态通过 `kernel.host.status` 发布，字段为 `state`、`ready`、`total`、可选 `plugin`。
+- `kernel.host.restarted` 和 `kernel.host.quarantined` 标记状态转换。
+- `kernel.host.status` 可以 replay，让随宿主重启的插件得知当前状态。
+- 被托管插件不拥有终端。`kernel.attach`、`kernel.detach`、`kernel.write` 都返回 -32601。
+- `--check` 报告会把每行标为 `host: "shared"` 或 `host: "process"`。
+- 启动日志会统计三者：`boot: 31 plugins, 1 host, 0 processes`。
+
+runtime 配置下，这些监督职责属于 Runtime，见 [Runtime](/docs/blmoadll/runtime)。内核既不知道被托管的插件，也不知道宿主的 pid。

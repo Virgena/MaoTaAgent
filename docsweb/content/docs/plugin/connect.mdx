@@ -1,0 +1,148 @@
+---
+title: 连接与分帧
+description: fd 0 / fd 1、Content-Length 帧、JSON-RPC 信封与 id
+---
+
+**读者**：已经能跑起插件，需要自己实现或排查收发循环的人。
+
+**结论**：内核和插件之间只有一种格式：`Content-Length` 头部加 UTF-8 JSON 正文。stdout 只能出现帧，输入必须自己缓冲拼帧。
+
+## 两个文件描述符
+
+<figure className="not-prose my-8 overflow-hidden rounded-xl border border-fd-border/70 bg-fd-card/50">
+  <figcaption className="flex items-center gap-2 border-b border-fd-border/60 px-5 py-3 text-xs font-medium text-fd-muted-foreground">
+    <span className="h-1.5 w-1.5 rounded-full bg-fd-primary" />
+    插件进程的 I/O
+  </figcaption>
+  <div className="divide-y divide-fd-border/50">
+    <div className="grid grid-cols-[4.5rem_1fr] items-start gap-4 px-5 py-4 sm:grid-cols-[6rem_1fr] sm:gap-6">
+      <div className="space-y-0.5">
+        <code className="block font-mono text-xs text-fd-foreground">fd 0</code>
+        <span className="block text-[10px] tracking-widest text-fd-muted-foreground/70">stdin</span>
+      </div>
+      <div className="flex items-start gap-2.5 pt-0.5 text-sm leading-relaxed text-fd-muted-foreground">
+        <span aria-hidden="true" className="text-fd-primary">←</span>
+        <span>内核发给你的帧</span>
+      </div>
+    </div>
+    <div className="grid grid-cols-[4.5rem_1fr] items-start gap-4 px-5 py-4 sm:grid-cols-[6rem_1fr] sm:gap-6">
+      <div className="space-y-0.5">
+        <code className="block font-mono text-xs text-fd-foreground">fd 1</code>
+        <span className="block text-[10px] tracking-widest text-fd-muted-foreground/70">stdout</span>
+      </div>
+      <div className="flex items-start gap-2.5 pt-0.5 text-sm leading-relaxed text-fd-muted-foreground">
+        <span aria-hidden="true" className="text-fd-primary">→</span>
+        <span>你发给内核的帧</span>
+      </div>
+    </div>
+    <div className="grid grid-cols-[4.5rem_1fr] items-start gap-4 px-5 py-4 sm:grid-cols-[6rem_1fr] sm:gap-6">
+      <div className="space-y-0.5">
+        <code className="block font-mono text-xs text-fd-foreground">fd 2</code>
+        <span className="block text-[10px] tracking-widest text-fd-muted-foreground/70">stderr</span>
+      </div>
+      <div className="flex items-start gap-2.5 pt-0.5 text-sm leading-relaxed text-fd-muted-foreground">
+        <span aria-hidden="true" className="text-fd-muted-foreground/60">→</span>
+        <span>日志，不参与协议，按行转发到内核的 stderr</span>
+      </div>
+    </div>
+  </div>
+</figure>
+
+stderr 的每一行会被内核转发到自己的 stderr，并补上 `plugin` 字段。它不参与协议。
+
+## 一个帧
+
+```text
+Content-Length: 78\r\n
+\r\n
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocol":3}}
+```
+
+规则：
+
+- 头部是 `key: value` 行，以 `\n` 结尾。行尾的 `\r` 和填充空格会被容忍。
+- 头部块以空行结束。
+- 只解释 `Content-Length`，其他头部忽略。头部名不区分大小写。
+- 头部块合计上限 8 KiB，单行上限也是 8 KiB。
+- 正文是 `Content-Length` 字节的 UTF-8 JSON。
+- 正文字数上限由内核的 `max_frame_bytes` 控制，默认 64 MiB。
+- 正文必须是 JSON 对象。合法 JSON 但不是对象返回 -32600，不是 JSON 返回 -32700。
+- 帧之间没有分隔符，可能背靠背到达。
+- 每个帧都要立即 flush。
+
+## 写入
+
+```ts
+import { writeSync } from "node:fs";
+
+function send(message: unknown): void {
+  const body = Buffer.from(JSON.stringify(message), "utf8");
+  writeSync(1, `Content-Length: ${body.length}\r\n\r\n`);
+  writeSync(1, body);
+}
+```
+
+`Content-Length` 数的是字节，不是字符。中文和 emoji 必须用 `Buffer.byteLength` 或 `Buffer.from(...).length`。用 `String.length` 会让内核读到半个字符。
+
+## 读取
+
+输入不保证一次 `read` 正好给一个帧，也可能一次给多个帧。必须缓冲并循环拆帧：
+
+```ts
+let buffer = Buffer.alloc(0);
+
+process.stdin.on("data", (chunk: Buffer) => {
+  buffer = Buffer.concat([buffer, chunk]);
+  for (;;) {
+    const split = buffer.indexOf("\r\n\r\n");
+    if (split < 0) return;                       // 头部还不完整
+    const match = /content-length:\s*(\d+)/i.exec(
+      buffer.subarray(0, split).toString("latin1"),
+    );
+    if (!match) throw new Error("missing Content-Length");
+    const length = Number(match[1]);
+    if (buffer.length < split + 4 + length) return; // 正文还不完整
+    const payload = buffer.subarray(split + 4, split + 4 + length);
+    buffer = buffer.subarray(split + 4 + length);
+    handle(JSON.parse(payload.toString("utf8")));
+  }
+});
+```
+
+EOF 出现在帧边界上表示内核关闭了管道，这是正常退出路径。EOF 出现在头部块中途是错误。
+
+## JSON-RPC 信封
+
+```json
+{"jsonrpc":"2.0","id":7,"method":"invoke","params":{...}}          请求
+{"jsonrpc":"2.0","method":"$/event","params":{...}}                通知
+{"jsonrpc":"2.0","id":7,"result":{...}}                            成功响应
+{"jsonrpc":"2.0","id":7,"error":{"code":-32010,"message":"..."}}   错误响应
+```
+
+内核判断正文类型的顺序：
+
+1. 必须是 JSON 对象，否则 -32700 或 -32600。
+2. 带 `error` 的是错误响应。缺 `id` 按 null 算。
+3. 带 `method` 且 `id` 非 null 的是请求。
+4. 带 `method` 且没有 `id` 或 `id` 为 null 的是通知。
+5. 没有 `method` 但有 `id` 的是成功响应。缺 `result` 按 null 算。
+6. 既没有 `method` 也没有 `id` 的是 -32600。
+
+## id 规则
+
+- 内核发给你的 id 是数字，从 1 开始递增。回复必须带同一个 id。
+- 你发给内核的 id 可以是数字或字符串，内核原样回显。`"r-1"` 是合法 id。
+- 两个方向的空间彼此独立，不要混用。
+- 通知没有 id，不得应答。应答通知会被当成未知方法。
+
+## stdout 规则
+
+stdout 只能出现帧。以下内容都会破坏协议：
+
+- `console.log` 和 `console.error` 中写到 stdout 的部分。
+- 依赖库的启动横幅或调试输出。
+- 进度条、彩色输出、欢迎信息。
+- 未捕获异常的默认打印。
+
+日志一律走 stderr 或 `kernel.log`。`console.error` 在 Node 里写 stderr，通常安全，但更推荐[日志与诊断](/docs/plugin/logging)里的结构化通道。

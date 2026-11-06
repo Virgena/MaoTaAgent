@@ -1,0 +1,114 @@
+---
+title: 事件总线
+description: 主题匹配、投递预算、内核自己发布的事件与重载事件
+---
+
+**读者**：使用事件做生命周期同步、排查事件丢失或重载行为的人。
+
+**结论**：事件是广播，不是队列。订阅者按主题模式匹配接收，投递尽力而为，落后会被明确报告，但不会重发。
+
+## 事件长什么样
+
+```json
+{"method":"$/event",
+ "params":{"topic":"kernel.plugin.started","seq":12,"payload":{"plugin":"p","pid":4242}}}
+```
+
+- `topic`：点分名称。
+- `seq`：总线级递增计数。
+- `payload`：发布者提供的任意 JSON。
+
+订阅者是插件或宿主。插件如何发布和订阅，见[发布与订阅](/docs/plugin/events)。
+
+## 主题匹配
+
+模式按 `.` 切分，逐段比较：
+
+- `*` 匹配恰好一个段。
+- `**` 是保留字，当前版本不匹配任何东西。
+- 模式和主题的段数必须相同。
+
+| 模式 | 匹配 | 不匹配 |
+|---|---|---|
+| `demo.*` | `demo.turn` | `demo.turn.started`，`loops.turn` |
+| `demo.turn` | `demo.turn` | `demo.turn.started` |
+| `*.*` | `demo.turn` | `demo` |
+| `kernel.plugin.*` | `kernel.plugin.started` | `kernel.plugin.a.b` |
+
+## seq
+
+`seq` 是总线级计数器，不是每个主题各自计数。它能提示"我可能漏了事件"，但不能判断某个主题是否出现缺口。
+
+## 投递预算
+
+每个订阅都有预算，按已投递但未确认的条数和字节数计算：
+
+| 项目 | 默认值 |
+|---|---|
+| `event_queue_len` | 1024 条 |
+| `event_queue_bytes` | 4 MiB |
+
+超出预算时：
+
+1. 丢弃最新的事件，不是最旧的。
+2. 向订阅者发送 `kernel.event.dropped`，`payload` 为 `{subscription_id, dropped_count}`，`seq` 固定为 0。
+3. 丢弃通知不消耗预算，每个订阅最多每秒一次。
+4. 订阅者消费后预算归还，所以卡住的订阅者会持续触发丢弃。
+
+单帧大小按 `payload 字节数 + topic 长度 + 64` 估算。
+
+事件是尽力而为。需要可靠投递时，用能力调用，不要用事件。
+
+## 内核发布的事件
+
+| 主题 | payload | 何时 |
+|---|---|---|
+| `kernel.plugin.started` | `plugin`、`pid`、`trigger`、`cwd`、`command`、`args` | 插件 `start` 成功 |
+| `kernel.plugin.stopped` | `plugin`、`reason`（`shutdown` 或 `crash`），内核要求停止时还有 `trigger` | 进程结束 |
+| `kernel.plugin.degraded` | `plugin`、`code`、`signal`、`message` | 插件未经要求退出 |
+| `kernel.plugin.blocked` | `plugin`、缺失的能力 | 插件进入等待状态 |
+| `kernel.capabilities.changed` | `capabilities`（整张新表） | 热重载替换路由表 |
+| `kernel.config.reloaded` | `path` | 配置变更被接受 |
+| `kernel.event.dropped` | `subscription_id`、`dropped_count` | 订阅者落后 |
+
+这些主题使用 `kernel.` 前缀。插件不能发布它们。
+
+`trigger` 表示生命周期变化的来源：
+
+| trigger | 含义 |
+|---|---|
+| `boot` | 启动时被内核拉起或拦下 |
+| `config` | 配置文件变化导致拉起、停止或等待 |
+| `source` | 宿主检测到源码变化并按名字重启 |
+| `manual` | 宿主手动重启 |
+
+崩溃（`reason: "crash"`）没有 `trigger`。只有内核主动要求的停止才有。
+
+## replay
+
+新订阅者通常错过启动期的事件。宿主的 `subscribe` 可以带 `replay: true`，让内核补发当前状态：
+
+- 为每个存活插件发送一条 `kernel.plugin.started`。
+- 为每个等待中的插件发送一条 `kernel.plugin.blocked`。
+
+补发的是真实事件，字段与实时事件一致，`trigger` 取插件启动时的值。订阅了匹配模式的插件也会收到。
+
+## 热重载时的事件
+
+配置变更被接受时，内核发布：
+
+1. `kernel.capabilities.changed`，携带整张新表。
+2. `kernel.config.reloaded`，携带配置文件路径。
+
+被替换的插件收到 `shutdown{reason:"reload"}`。新插件重新走初始化和启动流程。重载失败时整体回滚，只留下日志，没有成功事件。
+
+重载的进程细节见[进程与生命周期](/docs/blmoadll/process)，路由细节见[能力与路由](/docs/blmoadll/routing)。
+
+## Runtime 形态的事件
+
+runtime 配置下，事件由 Runtime 发布，主题和 payload 保持不变，并额外提供：
+
+- `kernel.runtime.status`
+- `kernel.runtime.failed`
+
+详见 [Runtime](/docs/blmoadll/runtime)。

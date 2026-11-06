@@ -1,0 +1,118 @@
+---
+title: 调用其他能力
+description: 用 kernel.invoke 调用别的插件，处理超时、错误和取消
+---
+
+**读者**：插件需要调用其他插件提供的能力时。
+
+**结论**：用 `kernel.invoke` 发起请求，`meta.request_id` 必须是字符串。结果原样返回；流式调用得到流 id，而不是数据本身。
+
+## 一次调用
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "r-1",
+  "method": "kernel.invoke",
+  "params": {
+    "capability": "demo.text",
+    "method": "chat",
+    "params": {"prompt": "hi"},
+    "meta": {"request_id": "r-1", "stream": false, "timeout_ms": 30000}
+  }
+}
+```
+
+| meta 字段 | 必填 | 说明 |
+|---|---|---|
+| `request_id` | 是 | 必须是字符串。缺失或不是字符串返回 -32602 |
+| `stream` | 否 | 默认 false。true 表示要流式返回 |
+| `timeout_ms` | 否 | 默认取提供方插件的 `request_timeout_ms` |
+
+建议让 `request_id` 和本次请求的 `id` 取同一个值。内核通过 `(caller, request_id)` 映射取消。
+
+方向很容易混淆：
+
+- 你作为调用方时，`meta.request_id` 是字符串。
+- 你作为提供方时，收到的 `meta.request_id` 是数字。
+
+这不是笔误，是两个独立方向。
+
+## 普通结果
+
+结果就是提供方的返回值，原样返回：
+
+```json
+{"jsonrpc":"2.0","id":"r-1","result":{"text":"hi"}}
+```
+
+## 流式结果
+
+`stream: true` 时，结果只是一个流 id：
+
+```json
+{"jsonrpc":"2.0","id":"r-1","result":{"stream_id":"f-3"}}
+```
+
+`stream_id` 由内核生成，格式为 `f-N`。之后通过 `$/stream/chunk` 接收 chunk，直到终结 chunk。完整规则见[流式输出](/docs/plugin/streams)。
+
+## 可能遇到的错误
+
+| code | 含义 |
+|---|---|
+| -32010 | 没有插件提供这个能力 |
+| -32011 | 提供方已退出或不可用，`data` 带 `{plugin, exit_code, signal}` |
+| -32012 | 调用超时 |
+| -32014 | 提供方还活着，但尚未 `start` |
+| -32019 | 你的并发上限或全局并发上限已满 |
+
+## 取消
+
+取消自己发起的调用：
+
+```json
+{"jsonrpc":"2.0","method":"$/cancel","params":{"request_id":"r-1"}}
+```
+
+或取消一条流：
+
+```json
+{"jsonrpc":"2.0","method":"$/cancel","params":{"stream_id":"f-3"}}
+```
+
+取消是协作式的：
+
+- 内核停止转发。
+- 内核把 `$/cancel` 转给提供方。
+- 提供方可能继续工作一段时间，内核无法强制它停止。
+- 取消后不会有终结帧。这是你自己的决定，不要等待 `done`。
+
+## 路由规则
+
+调用方应当遵守这些规则：
+
+- 永远按能力 ID 调用。不要缓存"哪个插件提供这个能力"，重载会换表。
+- 能力不在表里时得到 -32010。等待中的插件不算提供方。
+- 提供方崩溃后能力槽保留，调用继续得到 -32011。不要静默改路。
+- 内核不重试。重试由你决定，注意幂等性。
+- 一个能力只有一个提供方，没有优先级或负载均衡。
+
+## 并发
+
+- 每个插件最多 `max_inflight` 个在途调用，默认 64。
+- 全局最多 `max_inflight_total` 个在途调用，默认 1024。
+- 超过任一上限立刻返回 -32019，不排队。
+
+调用方应当限制并发，或接受快速失败。
+
+## 调用方身份
+
+- 插件发起的调用，`meta.caller` 是你的插件 id。
+- 宿主发起的调用，`meta.caller` 是 `"host"`。
+- 调用方无法自报身份，也不能冒充其他插件。
+
+## 依赖声明
+
+`injects` 只影响启动顺序，不影响运行时权限。你可以在运行时调用没有声明 `injects` 的能力，但那时提供方可能尚未启动，调用会得到 -32010 或 -32014。
+
+需要保证提供方先启动时，在 `initialize` 的 `injects` 里声明它，见[初始化与关闭](/docs/plugin/lifecycle)。

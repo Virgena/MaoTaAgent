@@ -1,0 +1,163 @@
+---
+title: Runtime
+description: 内核唯一的子进程，以及它与内核之间的协议
+---
+
+**读者**：维护 Runtime、内核或 runtime 配置的人。插件作者不需要读这一页。
+
+**结论**：runtime 配置下，内核只启动一个 Runtime 子进程，由它拥有全部插件。面向插件的协议不变，插件感觉不到形态变化。
+
+## 分工
+
+内核保留前端协议和公共设施：
+
+- 宿主方法：`invoke`、`capabilities`、`subscribe`、`unsubscribe`、`shutdown`、`restart`。
+- 能力表与路由。
+- 流、取消和背压。
+- 事件总线。
+
+Runtime 负责插件侧：
+
+- 发现、加载、卸载和重载插件。
+- spawn、停止和重启插件进程。
+- 监督、崩溃归因和隔离。
+- 插件侧的事件订阅和投递。
+
+内核不再读 `[plugins.*]`、不再解析包、不再校验插件图、不再 spawn 插件进程、不再重启插件、不再判定崩溃。
+
+同一份文件里的 `[plugins.*]`、`[capability]` 和 `[runtime.*]` 属于 Runtime。没有 `[kernel.runtime]` 的配置在一个过渡版本里沿用[共享扩展宿主](/docs/blmoadll/shared-host)的形态。两种形态不会在同一次运行中混用。
+
+## 配置
+
+```toml
+[kernel]
+runtime_ready_ms = 30000
+
+[kernel.runtime]
+command = "<node>"
+args = ["<...>/@maota/runtime/lib/index.js"]
+
+[kernel.runtime.env]
+MAOTA_HOME = "..."
+```
+
+`[kernel.runtime]` 接受插件行的执行字段：`name` 或 `command`、`args`、`env`、`cwd`、`clear_env`，并由同一套代码解析。
+
+## 启动与就绪
+
+1. 内核按[连接与分帧](/docs/plugin/connect)的规则 spawn Runtime。
+2. 内核等待第一份能力快照，上限为 `runtime_ready_ms`。
+3. 在第一份快照之前，内核不应答任何前端请求。
+4. Runtime 的第一帧必须是 `$/runtime/ready {v: 1}`。
+
+失败处理：
+
+- 版本未知：一行日志，退出码 1。
+- Runtime 在第一份快照前退出：stderr 一行 JSON 报告，退出码 1。
+- Runtime 未及时注册：同样按启动失败处理。
+
+## Runtime 到内核
+
+| 方法 | 参数 | 含义 |
+|---|---|---|
+| `$/runtime/ready` | `v` | 协议版本，第一帧 |
+| `$/runtime/capabilities` | `v`、`table`、`plugins` | 完整能力表快照 |
+| `$/runtime/event` | `topic`、`payload`、可选 `plugin` | 生命周期事实或插件发布 |
+| `$/stream/chunk` | 同[流式输出](/docs/plugin/streams) | 前端调用的一个 chunk |
+| `$/stream/error` | `stream_id`、`code`、`message`、可选 `data` | 前端调用的终结错误 |
+
+快照是原子的：
+
+- `table` 把能力 id 映射到 `{plugin}`。
+- `plugins` 列出 `{id, state}`。
+- 内核整体换表，并发布 `kernel.capabilities.changed`。
+
+格式错误的快照只记一行日志，旧表保留。错误包括不是对象、同一能力出现两次、未知插件状态。
+
+`$/runtime/event` 只接受 `kernel.plugin.*` 和 `kernel.runtime.*`。其他主题记日志并丢弃。
+
+带 `plugin` 的事件是该插件自己的 `kernel.publish`，主题由插件选择，内核原样发布。Runtime 也会把它投递给插件订阅。不带标签的事件是生命周期事实。
+
+已死插件的能力槽保留在表里，之后的调用仍返回 -32011，并带 `data.plugin`。
+
+## 内核到 Runtime
+
+| 方法 | 参数 | 含义 |
+|---|---|---|
+| `invoke` | `capability`、`method`、`params`、可选 `meta.stream` | 前端调用，Runtime 路由到插件 |
+| `$/cancel` | `stream_id` | 前端放弃了一条流 |
+| `restart` | `plugin`、可选 `reason` | 原样转发，内核不做决定 |
+| `status` | 无 | `{state, ready, total, 可选 plugin}` |
+| `shutdown` | 可选 `reason` | 排空插件、回复、退出 |
+
+`invoke` 和流帧保持宿主协议的形状，前端分辨不出两种形态。
+
+`restart` 的结果：
+
+- Runtime 接受：`{}`。
+- 插件无法回来：-32011。
+- 未知插件 id 或 reason：-32602。
+
+判断由 Runtime 做，内核只转发。`status.state` 是 `starting`、`ready`、`recovering`、`quarantined`、`failed` 之一。
+
+内核用 `request_timeout_ms` 约束转发调用，Runtime 用自己的超时约束到插件的调用。任一侧都可能返回 -32011。
+
+## 事件
+
+Runtime 按原主题和 payload 发布这些事件：
+
+- `kernel.plugin.started`
+- `kernel.plugin.stopped`
+- `kernel.plugin.degraded`
+- `kernel.plugin.blocked`
+
+另外增加两个：
+
+| 主题 | payload | 何时 |
+|---|---|---|
+| `kernel.runtime.status` | `state`、`ready`、`total`、可选 `plugin` | 聚合状态变化 |
+| `kernel.runtime.failed` | `code`、`signal`、`message` | Runtime 自身死亡 |
+
+`kernel.runtime.status` 取代 `kernel.host.status`，同样可以 replay。
+
+`kernel.runtime.failed` 会结束本次运行：内核刷新队列并以非零码退出。
+
+Runtime 也是插件事件的来源。插件的 `kernel.subscribe` 和 `kernel.unsubscribe` 由 Runtime 应答，它按[事件总线](/docs/blmoadll/events)的规则匹配模式、保存订阅，并通过共享管道投递 `$/event`。
+
+## 监督边界
+
+- 内核启动 Runtime，并在关闭时停止它。内核从不重启 Runtime。
+- Runtime 崩溃会结束本次运行，不进入循环重启。
+- Runtime 负责启动、重启和停止 Plugin Process。
+- 重启预算、ping 看门狗和两次命中隔离是 Runtime 的策略。
+- Plugin Process 是 Runtime 的子进程，它的 pid 不会出现在内核里。
+- 内核退出会关闭 Runtime 的 stdin。Runtime 应停止插件、杀掉 Plugin Process 然后退出。不这么做的 Runtime 会被内核强杀。
+
+## 保证与不保证
+
+有保证：
+
+- 插件的普通故障只影响该插件的调用，包括调用抛错、`initialize`、`start`、`close` 失败，以及归因到它的未处理 rejection。
+- Runtime 让兄弟插件继续运行。
+- 故障插件保留能力槽，调用返回 -32011。
+- 插件可以在不影响兄弟插件的情况下重载。
+
+不保证：
+
+- 某个插件里的同步死循环会阻塞共享线程。
+- OOM、原生崩溃或 `process.exit` 会带走整个 Plugin Process。
+- 没有抢占、没有 VM、没有逐插件进程。
+
+Plugin Process 死亡时，Runtime 会在共享宿主的预算内重启并重新加载整个集合。每个插件的内存状态都会丢失。
+
+## `--check` 在 runtime 模式下
+
+内核对 `--check` 只校验自己的段落：`[kernel]` 和 `[kernel.runtime]`。它从不启动 Runtime。
+
+插件校验交给 Runtime 自己的 `--check`：
+
+- 能力图。
+- `disabled` 和 `blocked`。
+- `[capability]` 钉子。
+
+前端可以把两次检查的结果合并。两边都使用宿主协议里描述的报告形状。

@@ -1,0 +1,124 @@
+---
+title: 发布与订阅
+description: 用 kernel.publish 发事件、用 kernel.subscribe 收事件，以及丢弃规则
+---
+
+**读者**：需要用事件做通知、进度广播或生命周期同步的插件作者。
+
+**结论**：发布是广播，订阅按主题模式匹配。投递尽力而为，落后会被报告，但不会重发。需要可靠投递时改用能力调用。
+
+## 发布
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"kernel.publish",
+ "params":{"topic":"demo.turn","payload":{"n":1}}}
+```
+
+结果是 `{}`。
+
+规则：
+
+- `topic` 不能以 `kernel.` 开头。这个前缀保留给内核。违反时返回 -32602，`error.data.reason` 为 `"reserved_topic"`。
+- `payload` 序列化后不能超过 `event_payload_bytes`，默认 256 KiB。超过返回 -32020。
+- 发布是 fire and forget。没有送达回执，也没有订阅者数量。
+- 没有订阅者不是错误。
+
+## 订阅
+
+```json
+{"jsonrpc":"2.0","method":"kernel.subscribe",
+ "params":{"patterns":["demo.*","kernel.plugin.*"]}}
+→ {"subscription_id":"sub-7"}
+```
+
+规则：
+
+- `patterns` 必须是非空数组。
+- 一个订阅可以带多个模式。任意匹配都会投递。
+- 订阅 id 由内核生成，格式为 `sub-N`。
+- 插件退出时，所有订阅自动清理。不需要也不能在退出后继续退订。
+
+取消订阅：
+
+```json
+{"jsonrpc":"2.0","method":"kernel.unsubscribe",
+ "params":{"subscription_id":"sub-7"}}
+→ {}
+```
+
+未知订阅 id 返回 -32021。
+
+## 接收
+
+```json
+{"method":"$/event",
+ "params":{"topic":"kernel.plugin.started","seq":12,"payload":{"plugin":"p","pid":4242}}}
+```
+
+`$/event` 是通知，不得应答。
+
+## 模式匹配
+
+- 按 `.` 切分段。
+- `*` 匹配恰好一个段。
+- `**` 是保留字，当前版本不匹配任何东西。
+- 模式和主题的段数必须相同。
+
+| 模式 | 匹配 | 不匹配 |
+|---|---|---|
+| `demo.*` | `demo.turn` | `demo.turn.started`，`loops.turn` |
+| `demo.turn` | `demo.turn` | `demo.turn.started` |
+| `*.*` | `demo.turn` | `demo` |
+| `kernel.plugin.*` | `kernel.plugin.started` | `kernel.plugin.a.b` |
+
+## seq
+
+`seq` 是总线级递增计数，不是每个主题各自计数。它能提示"可能漏了事件"，但不能判断某个主题是否出现缺口。
+
+## 投递预算
+
+每个订阅的预算按已投递但未确认的条数和字节数计算：
+
+| 项目 | 默认值 |
+|---|---|
+| `event_queue_len` | 1024 条 |
+| `event_queue_bytes` | 4 MiB |
+
+超出后：
+
+1. 丢弃最新的事件。
+2. 发送 `kernel.event.dropped`，`payload` 为 `{subscription_id, dropped_count}`。
+3. 丢弃通知不消耗预算，每个订阅最多每秒一次。
+4. 消费后预算归还。
+
+事件是尽力而为。不要用它传关键数据或可靠任务。需要可靠投递时，用能力调用。
+
+## 内核事件
+
+插件可以订阅内核自己发布的事件：
+
+- `kernel.plugin.*`
+- `kernel.capabilities.changed`
+- `kernel.config.reloaded`
+- `kernel.event.dropped`
+
+完整列表和 payload 见[事件总线](/docs/blmoadll/events)。
+
+需要知道"当前有哪些插件活着"时，宿主可以在 `subscribe` 里带 `replay: true`。补发的事件对插件也是真实事件，订阅了匹配模式的插件同样会收到。
+
+## 不要发布内核主题
+
+插件不能发布 `kernel.` 前缀的主题。这包括伪造 `kernel.plugin.started` 之类的生命周期事件。内核会以 -32602 拒绝。
+
+## 事件与调用怎么选
+
+| 需求 | 选择 |
+|---|---|
+| 需要返回值 | 能力调用 |
+| 需要可靠送达 | 能力调用 |
+| 需要等对方处理完 | 能力调用 |
+| 一对多通知 | 事件 |
+| 进度或状态广播 | 事件 |
+| 允许丢失的遥测 | 事件 |
+
+事件不保证送达，不保证顺序跨主题一致，也不提供重试。

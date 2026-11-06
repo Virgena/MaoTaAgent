@@ -1,0 +1,26 @@
+{
+  "title": "用户",
+  "description": "功能介绍",
+  "icon": "Building",
+  "root": true,
+  "pages": [
+    "---Introduction---",
+    "index",
+    "what-is-fumadocs",
+    "comparisons",
+    "manual-installation",
+    "guides",
+    "---Writing---",
+    "page-conventions",
+    "markdown",
+    "---Configurations---",
+    "navigation",
+    "deploying",
+    "internationalization",
+    "search",
+    "---Integrations---",
+    "editor",
+    "...integrations",
+    "community"
+  ]
+}

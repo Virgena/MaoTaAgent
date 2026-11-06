@@ -1,0 +1,101 @@
+---
+title: 终端 io
+description: 接管 stdin 和 stdout、读取输入、写出输出
+---
+
+**读者**：需要读取键盘、显示进度或写 tty 的插件作者。
+
+**结论**：终端 io 是内核提供的三个请求：`kernel.attach`、`kernel.detach` 和 `kernel.write`。同一时间只有一个插件拥有 stdin 或 stdout。
+
+## 边界
+
+内核的定位是"加载、卸载、依赖，仅此而已"。但把宿主自己的 stdin 和 stdout 复用给插件属于传输工作，所以内核承担这部分职责。
+
+即便如此，内核仍然不知道 UI 是什么。它只按所有权把字节转发给一个插件。
+
+## 三个请求
+
+```json
+{"method":"kernel.attach","params":{"stream":"stdin","mode":"line"}}  → {}
+{"method":"kernel.detach","params":{"stream":"stdin"}}                → {}
+{"method":"kernel.write","params":{"stream":"stdout","data":"..."}}   → {}
+```
+
+`stream` 只接受 `"stdin"` 和 `"stdout"`。其他值返回 -32602。
+
+## stdin
+
+### 接管
+
+```json
+{"method":"kernel.attach","params":{"stream":"stdin"}}
+```
+
+- 同一时间只有一个所有者。
+- attach 是抢占式的。上一个所有者立刻收到 `$/io/detached{stream:"stdin", reason:"taken_over"}`。
+- 接管在一把锁内完成，不存在两个插件同时以为自己是所有者的窗口。
+- 只有在第一次 attach 之后，内核才开始读取自己的 stdin。之前的输入留在操作系统缓冲区，不会丢失。
+
+### 接收数据
+
+```json
+{"method":"$/io/data","params":{"stream":"stdin","data":"hello\n","eof":false}}
+```
+
+规则：
+
+- `data` 是字符串，不是 base64。
+- 非法 UTF-8 字节会被有损解码为 U+FFFD。需要二进制时用能力调用和 base64。
+- 分块按读取大小，不按行。`io_line_bytes` 默认 8 KiB。一个 `$/io/data` 不等于一行，需要按行处理时自己缓冲。
+- stdin 结束时先收到 `{"data":"","eof":true}`，随后内核开始统一关闭，reason 为 `kernel_exit`。
+- detach 会中断一次读取。重新 attach 后最多丢失一个已读出但未投递的 chunk。
+- `mode` 默认 `"line"`，当前只记录，不改变行为。
+
+## stdout
+
+### 接管
+
+```json
+{"method":"kernel.attach","params":{"stream":"stdout"}}
+```
+
+stdout 的 `mode` 当前没有效果。
+
+### 写入
+
+```json
+{"method":"kernel.write","params":{"stream":"stdout","data":"\u001b[2J"}}
+→ {}
+```
+
+规则：
+
+- 只允许 `stream: "stdout"`。
+- 单次 `data` 不能超过 `event_payload_bytes`，默认 256 KiB。超过为 -32020。
+- 内核 stdout 队列积压超过 `io_write_queue_bytes`，默认 4 MiB，返回 -32019。
+- `data` 是字符串，实际写出的是它的 UTF-8 编码。终端转义序列可以直接写。
+
+### 释放
+
+```json
+{"method":"kernel.detach","params":{"stream":"stdout"}}
+```
+
+detach 不是关闭信号。释放 stdout 不会触发内核关闭。
+
+## 宿主模式没有终端
+
+在宿主模式下，内核的 fd 0 和 fd 1 是宿主协议，fd 2 是日志。因此：
+
+- 插件 attach 会得到 -32601。
+- 宿主发送 `kernel.attach`、`kernel.detach`、`kernel.write` 也会得到 -32601。
+- 当前版本没有把宿主键盘或 tty 透传给插件的通道。
+
+这是已知缺口，不是配置问题。
+
+## 多插件争用
+
+- stdin 被另一个插件接管时，你会收到 `$/io/detached`。
+- 收到后应立即停止假设自己拥有 stdin。
+- 不要在没有所有权时继续调用 `kernel.write`。
+- stdout 也按所有权管理，但重新 attach 的语义由内核决定，插件应假设同一时间只有一个写者。

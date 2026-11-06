@@ -1,0 +1,114 @@
+---
+title: 配置与启动
+description: 插件行、内核参数、配置分层，以及 --check 检查什么
+---
+
+**读者**：部署、调整或排查 blmoadll 配置的人。
+
+**结论**：一份 TOML 配置描述内核参数和插件行。插件行决定进程怎么起，`[plugins.<id>.config]` 决定给插件传什么，`[capability]` 只在两个插件争同一能力时才需要。
+
+## 配置文件结构
+
+```toml
+[kernel]
+request_timeout_ms = 30000
+max_inflight = 64
+
+[plugins.demo]
+command = "node"
+args = ["plugins/minimal-plugin.js"]
+
+[plugins.demo.config]
+greeting = "hi"
+
+[capability]
+"demo.text" = "demo"
+```
+
+一个文件通常包含三类内容：
+
+- `[kernel]`：内核自己的参数，字段见[上限与超时](/docs/blmoadll/limits)。
+- `[plugins.<id>]`：每个插件一行，决定进程如何启动。
+- `[capability]`：可选的能力提供方钉子，只在需要固定提供方时写。
+
+## 插件行
+
+```toml
+[plugins.demo]
+command = "node"                  # 裸名字在 PATH 上查找
+args = ["plugins/minimal-plugin.js"]
+# name = "@scope/plugin"        # 另一种形式：运行一个包
+# cwd = "plugins"               # 默认是入口配置文件所在目录
+# env = { API_KEY = "${TOKEN}" } # ${VAR} 会展开，未定义是硬错误
+# clear_env = true               # 丢弃继承的环境变量
+# disabled = true                # 保留行，但不启动
+# request_timeout_ms = 1000     # 别人调用我时的默认超时
+```
+
+规则：
+
+- 一行要么写 `command`，要么写 `name`，不能同时写，且必须写一个。
+- `command` 包含路径分隔符时，相对于入口配置文件所在目录解析；裸名字交给 PATH。
+- `name` 按 Node 解析 import 的方式查找：从入口配置目录向上找最近的 `node_modules/<name>/package.json`，再取 `exports["."]` 或 `main`，默认 `index.js`。
+- `args` 也会展开 `${VAR}`，但不会被当作路径。
+- 未定义的 `${VAR}` 是硬错误。`$$` 表示字面量 `$`。展开不递归。
+- `disabled = true` 的行仍参与层合并，但不启动，也不在能力表里。上层覆盖为 `false` 即可启用。
+- 插件 id 不能是 `host`，这个 id 保留给宿主。
+
+## 传给插件的配置
+
+`[plugins.<id>.config]` 是任意 JSON 对象，内核不校验键，也不解释内容。它原样出现在该插件 `initialize` 的 `params.config` 里。
+
+哪些键是必需的、多余键如何处理，是插件和配置作者之间的约定。插件侧怎么读，见[初始化与关闭](/docs/plugin/lifecycle)。
+
+## 能力提供方钉子
+
+默认情况下，能力由声明 `provides` 的插件提供。如果两个插件声明同一能力，或者需要固定提供方，用 `[capability]` 指定：
+
+```toml
+[capability]
+"demo.text" = "demo"
+```
+
+一个能力只能有一个提供方。热重载会替换整张表，不会做优先级或故障转移。
+
+## 配置分层
+
+配置可以用 `extends` 叠加：
+
+```toml
+extends = ["blmoadll.base.toml", "team.toml"]
+```
+
+- 列出的每个文件都必须存在。缺一个就启动失败，并指出读不到的文件。
+- 相对路径相对于写它的文件所在目录解析，绝对路径按原样使用。
+- 后面的层获胜。表按键合并，数组和标量整体替换。
+- 相对的 `command` 和 `cwd` 相对于启动时传入的入口文件所在目录解析，不是相对于声明它的层。
+- 同一个文件被到达两次只算一次，位置取第一次出现的地方。
+- 热重载监视整个栈。修改任何一层都会触发重载。
+- `extends` 是文件机制，不会出现在插件的 `config` 里。从字符串加载时写 `extends` 是硬错误。
+
+## 命令行
+
+```text
+blmoadll <config.toml> [--check] [--json]
+```
+
+这个可执行文件由 `--features host` 构建产出。
+
+`--check` 的行为：
+
+1. 启动每个插件。
+2. 执行一次 `initialize`。
+3. 校验能力图，计算启动顺序。
+4. 打印报告并退出。通过为 0，至少一个错误为 1。
+
+它不发送 `start`，不碰 io，不产生生命周期事件，因此没有网络访问和副作用。`disabled` 行和等待中的插件只算警告，报告里分别放在 `disabled` 和 `blocked`。
+
+`--json` 把报告打成一行 JSON，适合脚本读取。
+
+## 运行时配置
+
+如果配置里写了 `[kernel.runtime]`，内核只启动一个 Runtime 子进程，不再读取 `[plugins.*]`、`[capability]` 和 `[runtime.*]`。这些段落交给 Runtime 自己校验。详见 [Runtime](/docs/blmoadll/runtime)。
+
+没有 `[kernel.runtime]` 时，内核按[共享扩展宿主](/docs/blmoadll/shared-host)或独立进程的方式管理插件。

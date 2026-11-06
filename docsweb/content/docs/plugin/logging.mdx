@@ -1,0 +1,91 @@
+---
+title: 日志与诊断
+description: 用 kernel.log 和 stderr 记录，按错误码定位常见问题
+---
+
+**读者**：插件已经能跑，正在排查异常或准备上线的人。
+
+**结论**：日志只能走 `kernel.log` 或 stderr，绝不能走 stdout。大多数问题可以从错误码、stderr 和生命周期事件三处定位。
+
+## kernel.log
+
+```json
+{"jsonrpc":"2.0","method":"kernel.log",
+ "params":{"level":"info","message":"loaded 3 tools","fields":{"count":3}}}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `level` | `error`、`warn`、`info`、`debug`。其他值按 debug 处理 |
+| `message` | 人类可读字符串，默认空字符串 |
+| `fields` | 任意 JSON 对象，默认 `{}`，会被摊平进日志行 |
+
+内核会补上 `plugin` 字段，把这一行写到自己的 stderr。每行一个 JSON 对象，`target` 为 `"plugin"`。
+
+- 超过 `log_line_bytes`（默认 8 KiB）的行会被丢弃，并记一条警告。
+- 低于当前详细级别的日志会被过滤。
+- `kernel.log` 是通知，不需要也不应该回复。
+
+## stderr
+
+直接写 stderr 也会被转发：
+
+- 内核按行读取插件的 stderr。
+- 每行补上 `plugin` 字段。
+- `target` 为 `"plugin.stderr"`。
+- 超过 `log_line_bytes` 会被截断。
+
+纯文本 stderr 适合临时调试。结构化日志更容易检索和聚合，长期应使用 `kernel.log`。
+
+## 永远不要写 stdout
+
+stdout 是协议管道。以下输出会直接破坏协议：
+
+- `console.log`。
+- 依赖库的横幅或调试打印。
+- 进度条和欢迎信息。
+- 未捕获异常的默认打印。
+
+Debug 时如果必须打印，使用 `console.error` 或 `kernel.log`。
+
+## 常见问题
+
+| 现象 | 可能原因 | 排查方式 |
+|---|---|---|
+| 插件启动失败 | `initialize` 超时，缺声明数组，协议版本不是 3 | 查看 `--check` 报告和 stderr |
+| 调用方一直等不到回复 | 回复的 `id` 和请求不一致，或根本没回复 | 打印收到的 `id`，确认每个请求都有应答 |
+| 调用返回 -32011 | 插件在 `initialize` 后崩溃或退出 | 查看 `kernel.plugin.degraded`、`exit_code`、`signal` |
+| 调用返回 -32012 | 超时，或流空闲太久 | 检查 `request_timeout_ms`，长任务加心跳 |
+| 调用返回 -32014 | 插件活着但还没 `start` | 检查 `initialize` 是否阻塞，依赖是否满足 |
+| 调用返回 -32019 | 并发或流缓冲已满 | 降低并发，检查消费者是否读得太慢 |
+| 出现 -32016 | 帧超过 `max_frame_bytes` | 拆分大载荷，检查 `Content-Length` 是否按字节计算 |
+| 流 chunk 被丢弃 | chunk 在 `{stream_id}` 回复之前发出 | 先回复 stream id，再发 chunk |
+| 进程自行退出 | 在 `shutdown` 前退出 | 检查未捕获异常和 `process.exit` 调用 |
+| stdout 协议错乱 | 有非帧内容写到了 stdout | 搜索所有 `console.log` 和依赖输出 |
+
+## 排查顺序
+
+1. 先看插件是否完成 `initialize` 和 `start`。
+2. 再看 `kernel.log` 和 stderr 的最后几条。
+3. 然后看调用错误码和 `error.data`。
+4. 涉及启动顺序时，运行 `--check`。
+5. 涉及生命周期时，订阅 `kernel.plugin.*` 事件。
+
+## 版本
+
+- 当前协议版本是 3。
+- `kernel_version` 只用于诊断，不要用它开关功能。
+- 需要按版本分支时，使用 `protocol`。
+- 版本不匹配会得到 -32015，启动直接失败。
+
+## 日志字段建议
+
+结构化日志的 `fields` 建议包含：
+
+- `request_id`：关联一次调用。
+- `capability` 和 `method`：定位业务入口。
+- `stream_id`：关联流式调用。
+- `duration_ms`：耗时。
+- `error_code`：错误分类。
+
+这样在日志系统里可以按调用、按能力、按流聚合。

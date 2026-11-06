@@ -1,0 +1,192 @@
+---
+title: 初始化与关闭
+description: initialize 的四项声明、start 的路由表快照，以及 shutdown 的正确行为
+---
+
+**读者**：实现插件启动和退出逻辑的人。
+
+**结论**：`initialize` 决定内核知道什么，`start` 告诉你能调用谁，`shutdown` 要求你收尾并自行退出。三步都必须用同一个 id 应答。
+
+## 握手顺序
+
+<figure className="not-prose my-8 rounded-xl border border-fd-border/60 bg-fd-card/40 px-4 py-6 sm:px-8 sm:py-8">
+  <figcaption className="mb-7 text-center text-[11px] leading-relaxed text-fd-muted-foreground">
+    一次完整的启动与关闭握手。实线为内核发起，虚线为插件回复。
+  </figcaption>
+  <div className="mx-auto max-w-xl">
+    <div className="relative mb-7 h-10">
+      <div className="absolute left-[12%] top-0 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-fd-primary" />
+        <span className="text-[11px] font-semibold text-fd-foreground">内核</span>
+      </div>
+      <div className="absolute left-[88%] top-0 flex -translate-x-1/2 flex-col items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full border border-fd-muted-foreground/60" />
+        <span className="text-[11px] font-semibold text-fd-foreground">插件</span>
+      </div>
+    </div>
+    <div className="relative">
+      <span aria-hidden="true" className="absolute bottom-0 left-[12%] top-0 w-px bg-fd-border/60" />
+      <span aria-hidden="true" className="absolute bottom-0 right-[12%] top-0 w-px bg-fd-border/60" />
+      <div className="relative">
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">initialize</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] text-fd-muted-foreground">声明</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-dashed border-fd-muted-foreground/50" />
+          <span aria-hidden="true" className="absolute left-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-r-[6px] border-y-transparent border-r-fd-muted-foreground/50" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">start</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] text-fd-muted-foreground">{"{}"}</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-dashed border-fd-muted-foreground/50" />
+          <span aria-hidden="true" className="absolute left-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-r-[6px] border-y-transparent border-r-fd-muted-foreground/50" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">invoke（可重复）</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] font-medium text-fd-foreground">shutdown</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-fd-primary/70" />
+          <span aria-hidden="true" className="absolute right-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[6px] border-y-transparent border-l-fd-primary/70" />
+        </div>
+        <div className="relative h-11">
+          <div className="absolute inset-x-[12%] top-0 text-center font-mono text-[11px] text-fd-muted-foreground">{"{}"}</div>
+          <div className="absolute inset-x-[12%] top-6 border-t border-dashed border-fd-muted-foreground/50" />
+          <span aria-hidden="true" className="absolute left-[12%] top-6 h-0 w-0 -translate-y-1/2 border-y-[4px] border-r-[6px] border-y-transparent border-r-fd-muted-foreground/50" />
+        </div>
+        <div className="relative h-8">
+          <div className="absolute inset-x-[12%] top-1 text-center text-[11px] text-fd-muted-foreground">插件退出</div>
+          <span aria-hidden="true" className="absolute left-[88%] top-3 h-2 w-2 -translate-x-1/2 rounded-sm bg-fd-muted-foreground/40" />
+        </div>
+      </div>
+    </div>
+  </div>
+</figure>
+
+在 `start` 之前不会收到 `invoke`。在 `initialize` 回复之前，内核不会把插件放进路由表。
+
+## initialize
+
+参数：
+
+```json
+{
+  "protocol": 3,
+  "plugin_id": "provider",
+  "kernel_version": "0.1.0",
+  "config": {"prefix": "echo: "}
+}
+```
+
+| 字段 | 含义 |
+|---|---|
+| `protocol` | 内核协议版本，当前为 3 |
+| `plugin_id` | 你在配置里的 id |
+| `kernel_version` | 内核版本，仅用于日志和诊断 |
+| `config` | 配置里 `[plugins.<id>.config]` 的原样 JSON，没有时为 `{}` |
+
+`config` 的键由你和配置作者约定，内核不校验。读取哪些键由插件决定。如果使用 plugin-kit，`Definition.configKeys` 会声明允许的键，并对多余的键各记一条 warn。不声明就跳过检查。
+
+回复必须包含四项：
+
+```json
+{
+  "protocol": 3,
+  "provides": ["demo.text"],
+  "injects": [{"capability": "demo.tools", "optional": true}],
+  "registrations": [{"service": "demo.registry", "capability": "demo.text"}],
+  "host_calls": ["demo.text"]
+}
+```
+
+| 字段 | 说明 |
+|---|---|
+| `protocol` | 必须等于 3，否则 -32015，启动失败 |
+| `provides` | 你提供的能力 ID 数组 |
+| `injects` | 你依赖的能力。每项需要 `capability`，`optional` 默认 false |
+| `registrations` | 把已提供的能力注册到某个 service。`capability` 必须在 `provides` 里 |
+| `host_calls` | 宿主会直接调用的能力。每个 id 必须在 `provides` 里 |
+
+规则：
+
+- 四项都必须存在。缺一项是错误。
+- `optional: true` 的注入无人提供时，只记警告并跳过，不阻塞启动。
+- 必需注入或注册 service 无人提供，或依赖图有环，会阻塞启动。
+- 结果里的其他字段会被忽略。
+
+`injects` 和 `registrations` 决定启动顺序，不限制运行时调用。`host_calls` 只记录宿主消费关系，不增加依赖。
+
+必须在 `initialize_timeout_ms` 内回复，默认 5000。超时视为启动失败。
+
+## start
+
+参数是整张路由表的快照：
+
+```json
+{"capabilities": {"demo.text": {"plugin": "provider"}}}
+```
+
+- 按能力 ID 排序。
+- 这是快照，不是承诺。之后的变化通过 `kernel.capabilities.changed` 送达。
+- 你依赖的插件的 `start` 已经返回。
+- 回复 `{}`，结果会被忽略。
+- 必须在 `start_timeout_ms` 内回复，默认 10000。
+- `--check` 不会发送 `start`，也不产生生命周期事件。
+
+不要缓存"哪个插件提供哪个能力"。重载后表会整体替换，应按能力 ID 调用。
+
+## shutdown
+
+```json
+{"reason": "kernel_exit"}
+```
+
+四种 reason：
+
+| reason | 何时 |
+|---|---|
+| `kernel_exit` | 宿主退出，或内核 stdin 遇到 EOF |
+| `reload` | 热重载替换了你，或重载失败回滚 |
+| `ui_quit` | 用户或宿主请求退出 |
+| `check` | `--check` 正在收尾 |
+
+四种 reason 的行为必须完全一致。它们只用于日志和指标，不要根据它们分支。
+
+正确做法：
+
+1. 回复 `{}`。
+2. 停止接收新工作。
+3. 刷盘、关闭连接。
+4. 自行退出。
+
+超过 `shutdown_grace_ms`（默认 5000）未退出会被强杀，内核退出码变为 2。
+
+## 不要提前退出
+
+在 `initialize` 之后、内核要求关闭之前自行退出，会被视为崩溃：
+
+- 等待该插件回复的调用得到 -32011。
+- 它作为提供方的流被终止。
+- 内核发布 `kernel.plugin.degraded` 和 `kernel.plugin.stopped`。
+- 能力槽保留，之后的调用仍然得到 -32011。
+
+如果你需要主动停止，直接退出进程也是允许的，但要先确认没有未完成的调用和流。
+
+## 超时
+
+| 阶段 | 默认超时 | 超时结果 |
+|---|---|---|
+| `initialize` | 5000 | 启动失败 |
+| `start` | 10000 | 启动失败 |
+| `shutdown` | 5000 | 进程被强杀，内核退出码 2 |
+
+这些值可以在 `[plugins.<id>]` 下覆盖，详见[上限与超时](/docs/blmoadll/limits)。

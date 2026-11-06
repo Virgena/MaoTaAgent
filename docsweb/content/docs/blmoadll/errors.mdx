@@ -1,0 +1,65 @@
+---
+title: 错误码
+description: JSON-RPC 标准错误码与 blmoadll 自有错误块
+---
+
+**读者**：实现插件、宿主或内核调试工具，需要按错误码分支的人。
+
+**结论**：标准 JSON-RPC 错误码原样复用，其余 -320xx 是 blmoadll 自己的错误块。绝大多数错误可以直接根据下表定位。
+
+## 错误码表
+
+| code | 名称 | 含义 |
+|---|---|---|
+| -32700 | `parse_error` | 帧正文不是合法 JSON |
+| -32600 | `invalid_request` | 合法 JSON 但不是对象，或者既没有 `method` 也没有 `id` |
+| -32601 | `method_not_found` | 内核不认识这个方法 |
+| -32602 | `invalid_params` | 参数缺失或无效 |
+| -32603 | `internal_error` | 内核内部错误，例如响应没能送达 |
+| -32010 | `unknown_capability` | 没有插件提供这个能力 ID |
+| -32011 | `provider_unavailable` | 提供方已退出或不可用 |
+| -32012 | `request_timeout` | 调用超时，或流空闲太久 |
+| -32013 | `cancelled` | 已取消，目前是保留值 |
+| -32014 | `not_started` | 提供方还活着，但尚未 `start` |
+| -32015 | `protocol_version_mismatch` | `initialize` 的 `protocol` 不是 3 |
+| -32016 | `frame_too_large` | 帧超过 `max_frame_bytes` |
+| -32017 | `unknown_stream` | 未知的流 id，目前是保留值 |
+| -32018 | `invalid_config` | 配置或启动问题，例如 spawn 失败 |
+| -32019 | `overloaded` | 并发、队列或流缓冲区已满 |
+| -32020 | `payload_too_large` | 载荷超过上限 |
+| -32021 | `unknown_subscription` | 未知的订阅 id |
+
+## -32602 的常见来源
+
+- `kernel.invoke` 缺少字符串形式的 `meta.request_id`。
+- `initialize` 回复缺少必需的声明数组。
+- 订阅的 `patterns` 是空数组。
+- io 的 `stream` 既不是 `stdin` 也不是 `stdout`。
+- `kernel.write` 的 `stream` 不是 `stdout`。
+- `kernel.unsubscribe` 的 id 格式不对。
+- `kernel.publish` 使用了 `kernel.` 前缀。
+- 宿主 `shutdown` 的 `reason` 不是允许值。
+
+## 三个容易误解的点
+
+**-32016 不是响应。** 帧过大时管道已经不可信，内核会记日志、发布事件或写进 `--check` 输出，然后杀掉插件。调用方不会收到这个错误码。
+
+**-32013 和 -32017 是保留值。** 当前没有正常路径会产生它们。实现时可以按可能出现的错误处理，但不要依赖它们来区分状态。
+
+**-32011 在 `--check` 下有特殊含义。** 正常运行时表示提供方已退出；检查模式下表示插件在 `initialize` 后自行退出。
+
+## 排查顺序
+
+遇到错误时按这个顺序排查：
+
+1. 看错误码本身，先区分协议错误（-326xx）和内核错误（-320xx）。
+2. 看 `error.data`。`-32011` 会带 `{plugin, exit_code, signal}`。
+3. 看插件 stderr 和 `kernel.log` 输出。插件崩溃前通常有日志。
+4. 看 `kernel.plugin.stopped` 和 `kernel.plugin.degraded` 事件。
+5. 如果问题只在启动时出现，运行 `--check` 获得完整报告。
+
+## 相关页面
+
+- 超时和上限：见[上限与超时](/docs/blmoadll/limits)。
+- 插件侧如何返回错误：见[处理调用](/docs/plugin/invoke)。
+- 宿主的调用错误：见[宿主协议](/docs/blmoadll/host)。
