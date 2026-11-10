@@ -9,7 +9,7 @@ description: 内核如何启动、排序、监督和关闭插件进程
 
 ## 启动顺序
 
-<figure className="not-prose my-8 rounded-xl border border-fd-border/60 bg-fd-card/40 px-4 py-6 sm:px-8 sm:py-8">
+<figure aria-label="时序图：内核启动插件，依次交换 initialize、start、invoke 与通知、shutdown；插件退出后，内核等待并可能强杀。" className="not-prose my-8 rounded-xl border border-fd-border/60 bg-fd-card/40 px-4 py-6 sm:px-8 sm:py-8">
   <figcaption className="mb-7 text-center text-[11px] leading-relaxed text-fd-muted-foreground">
     启动、工作与关闭的全过程。实线为内核发起，虚线为插件回复。
   </figcaption>
