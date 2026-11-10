@@ -6,9 +6,9 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { ICON, MaoIcon as Icon, MaoSegmented, MaoSelect } from "maotaui";
 
 import { LANGS, useT } from "../lib/i18n.ts";
+import { maoValue, useMaoEvents } from "../lib/maoEvents.ts";
 import type { AppInfo, ThemePreference } from "../lib/rpc.ts";
 import { ModelsSettings } from "./ModelsSettings.tsx";
 
@@ -71,6 +71,10 @@ export function SettingsView({
   const [jump, setJump] = useState<Jump | null>(null);
   const [modelEditing, setModelEditing] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({ general: true });
+  const langRef = useRef<HTMLElement>(null);
+  const themeRef = useRef<HTMLElement>(null);
+  useMaoEvents(langRef, { "mt-change": (event) => onLanguage(maoValue(event)) });
+  useMaoEvents(themeRef, { "mt-change": (event) => onTheme(maoValue(event) as ThemePreference) });
 
   const pluginRows = [...new Set(Object.values(info?.capabilities ?? {}).map((route) => route.plugin))]
     .sort()
@@ -94,12 +98,12 @@ export function SettingsView({
           label: t("language"),
           note: t("languageNote"),
           control: (
-            <MaoSelect
+            <mao-select
+              ref={langRef}
               className="settings-lang"
               aria-label={t("language")}
-              options={[{ value: "system", label: t("followSystem") }, ...LANGS]}
+              options={JSON.stringify([{ value: "system", label: t("followSystem") }, ...LANGS])}
               value={locale}
-              onChange={(event) => onLanguage(event.target.value)}
             />
           ),
         },
@@ -116,16 +120,15 @@ export function SettingsView({
           name: t("appearance"),
           label: t("appearance"),
           control: (
-            <MaoSegmented
-              label={t("appearance")}
-              options={[
+            <mao-segmented ref={themeRef} label={t("appearance")} value={theme}>
+              {[
                 { value: "system", label: t("followSystem") },
                 { value: "dark", label: t("dark") },
                 { value: "light", label: t("light") },
-              ]}
-              value={theme}
-              onChange={(value) => onTheme(value as ThemePreference)}
-            />
+              ].map((option) => (
+                <mao-segment key={option.value} value={option.value}>{option.label}</mao-segment>
+              ))}
+            </mao-segmented>
           ),
         },
       ],
@@ -275,7 +278,7 @@ export function SettingsView({
             aria-label={t("close")}
             onClick={onClose}
           >
-            <Icon name={ICON.close} />
+            <mao-icon name="x" />
           </button>
         </header>
 
@@ -301,7 +304,7 @@ export function SettingsView({
                 aria-label={t("clear")}
                 onClick={() => setQuery("")}
               >
-                <Icon name={ICON.close} className="icon icon-sm" />
+                <mao-icon name="x" className="icon icon-sm" />
               </button>
             )}
           </div>
@@ -344,8 +347,8 @@ export function SettingsView({
                           aria-expanded={isOpen}
                           onClick={() => toggleSection(item.id)}
                         >
-                          <Icon
-                            name={isOpen ? ICON.chevronDown : ICON.chevronRight}
+                          <mao-icon
+                            name={isOpen ? "chevron-down" : "chevron-right"}
                             className="icon icon-sm settings-chevron"
                           />
                           <span>{item.label}</span>

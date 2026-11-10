@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { MaoButton } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
 import type { CompactionRecord, ContextView } from "../lib/rpc.ts";
@@ -93,9 +92,9 @@ export function ContextMeter({
               ))}
             </details>
           ) : null}
-          <MaoButton variant="solid" size="sm" disabled={compactDisabled} onClick={onCompact}>
+          <mao-button variant="solid" size="sm" disabled={compactDisabled} onClick={onCompact}>
             {context?.active === true ? t("compactRunning") : t("compactNow")}
-          </MaoButton>
+          </mao-button>
         </div>
       ) : null}
     </div>

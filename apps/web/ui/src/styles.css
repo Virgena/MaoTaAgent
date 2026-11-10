@@ -1548,7 +1548,7 @@ body {
   width: 160px;
 }
 
-.settings-lang .mt-select:focus-visible {
+.settings-lang mao-select::part(select) {
   outline: none;
 }
 
@@ -1617,11 +1617,8 @@ body {
   }
 }
 
-.key-form .mt-field {
+.key-form mao-text-field {
   margin: 0;
-}
-
-.key-form .mt-input {
   width: 240px;
 }
 
@@ -1848,7 +1845,7 @@ body {
   min-width: 0;
 }
 
-.model-provider-select .mt-select {
+.model-provider-select mao-select::part(select) {
   height: 30px;
   padding: 0 var(--mt-space-5) 0 var(--mt-space-2);
   border: 0;

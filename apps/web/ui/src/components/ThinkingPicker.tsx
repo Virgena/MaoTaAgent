@@ -1,13 +1,7 @@
-import { useEffect, useState } from "react";
-import {
-  ICON,
-  MaoButton,
-  MaoIcon as Icon,
-  MaoSegmented,
-  MaoSelect,
-} from "maotaui";
+import { useEffect, useRef, useState } from "react";
 
 import { useT, type MessageKey } from "../lib/i18n.ts";
+import { maoValue, useMaoEvents } from "../lib/maoEvents.ts";
 import type { AppInfo, ModelRoute } from "../lib/rpc.ts";
 import { Popover } from "./Popover.tsx";
 
@@ -46,6 +40,10 @@ export function ThinkingPicker({
   const [providerId, setProviderId] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const providerRef = useRef<HTMLElement>(null);
+  useMaoEvents(providerRef, { "mt-change": (event) => setProviderId(maoValue(event)) });
+  const thinkingRef = useRef<HTMLElement>(null);
+  useMaoEvents(thinkingRef, { "mt-change": (event) => onThinking(maoValue(event)) });
   const levels = info?.levels?.length ? info.levels : ["off", "low", "medium", "high"];
   const providers = (info?.models?.providers ?? []).filter((provider) => provider.enabled);
   const models = (info?.models?.models ?? []).filter((model) =>
@@ -99,7 +97,7 @@ export function ThinkingPicker({
       onClose={close}
       label={
         <>
-          <Icon name={ICON.cpu} className="icon icon-sm" />
+          <mao-icon name="cpu" className="icon icon-sm" />
           <span className="model-reason-trigger-name">{modelName}</span>
           {showReasoning ? (
             <>
@@ -113,21 +111,21 @@ export function ThinkingPicker({
               <span className="model-reason-trigger-capacity">{capacity}</span>
             </>
           )}
-          <Icon name={ICON.chevronDown} className="icon icon-sm" />
+          <mao-icon name="chevron-down" className="icon icon-sm" />
         </>
       }
     >
       {view === "models" ? (
         <>
           <div className="model-menu-head">
-            <MaoSelect
+            <mao-select
+              ref={providerRef}
               aria-label={t("modelProvider")}
               className="model-provider-select"
               value={providerId}
-              options={providers.map((item) => ({ value: item.id, label: item.name }))}
-              onChange={(event) => setProviderId(event.target.value)}
+              options={JSON.stringify(providers.map((item) => ({ value: item.id, label: item.name })))}
             />
-            <MaoButton
+            <mao-button
               className="mt-btn-icon"
               variant="flat"
               size="sm"
@@ -138,9 +136,9 @@ export function ThinkingPicker({
                 onOpenModels();
               }}
             >
-              <Icon name={ICON.plus} className="icon icon-sm" />
-            </MaoButton>
-            <MaoButton
+              <mao-icon name="plus" className="icon icon-sm" />
+            </mao-button>
+            <mao-button
               className="mt-btn-icon"
               variant="flat"
               size="sm"
@@ -148,8 +146,8 @@ export function ThinkingPicker({
               aria-label={t("searchModels")}
               onClick={() => setSearchOpen((was) => !was)}
             >
-              <Icon name={ICON.search} className="icon icon-sm" />
-            </MaoButton>
+              <mao-icon name="search" className="icon icon-sm" />
+            </mao-button>
           </div>
           {searchOpen ? (
             <input
@@ -180,17 +178,17 @@ export function ThinkingPicker({
                   }}
                 >
                   <span className="model-menu-check">
-                    {current ? <Icon name={ICON.check} className="icon icon-sm" /> : null}
+                    {current ? <mao-icon name="check" className="icon icon-sm" /> : null}
                   </span>
                   <span className="model-menu-name">{model.name}</span>
                   {meta === "" ? null : <span className="model-menu-meta">{meta}</span>}
-                  <Icon name={ICON.chevronRight} className="icon icon-sm" />
+                  <mao-icon name="chevron-right" className="icon icon-sm" />
                 </button>
               );
             })}
           </div>
           <button type="button" className="model-menu-footer" onClick={() => setView("detail")}>
-            <span className="model-menu-chip"><Icon name={ICON.cpu} className="icon icon-sm" />{modelName}</span>
+            <span className="model-menu-chip"><mao-icon name="cpu" className="icon icon-sm" />{modelName}</span>
             <span className="model-menu-chip">
               {showReasoning ? `${levelName(thinking)} · ` : ""}{capacity === "" ? t("model") : capacity}
             </span>
@@ -199,23 +197,26 @@ export function ThinkingPicker({
       ) : (
         <>
           <button type="button" className="model-detail-back" onClick={() => setView("models")}>
-            <Icon name={ICON.back} className="icon icon-sm" />
+            <mao-icon name="arrow-left" className="icon icon-sm" />
             <span>{modelName}</span>
           </button>
           <div className="model-detail-label">{t("reasoningLevel")}</div>
-          <MaoSegmented
+          <mao-segmented
+            ref={thinkingRef}
             label={t("reasoningLevel")}
             className="model-reasoning-segments"
-            options={reasoningLevels.map((level) => ({ value: level, label: levelName(level) }))}
             value={thinking}
-            onChange={onThinking}
-          />
+          >
+            {reasoningLevels.map((level) => (
+              <mao-segment key={level} value={level}>{levelName(level)}</mao-segment>
+            ))}
+          </mao-segmented>
           <div className="model-context-row">
             <span>{t("maxContext")}</span>
             <span>{capacity === "" ? "—" : capacity}</span>
           </div>
           <button type="button" className="model-menu-footer" onClick={() => setView("models")}>
-            <span className="model-menu-chip"><Icon name={ICON.cpu} className="icon icon-sm" />{modelName}</span>
+            <span className="model-menu-chip"><mao-icon name="cpu" className="icon icon-sm" />{modelName}</span>
             <span className="model-menu-chip">
               {showReasoning ? levelName(thinking) : ""}{capacity === "" ? "" : ` · ${capacity}`}
             </span>

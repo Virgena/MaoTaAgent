@@ -1,6 +1,5 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { ICON, MaoIcon as Icon } from "maotaui";
 import { Fragment, useMemo } from "react";
 
 import type { SessionMessage, SessionSummary } from "../lib/rpc.ts";
@@ -57,7 +56,7 @@ export function MessageItem({
       <div className="msg-note">
         <details className="note msg-compact">
           <summary className="note-summary">
-            <Icon name={ICON.plug} className="icon icon-sm" />
+            <mao-icon name="plug" className="icon icon-sm" />
             {t("compactCheckpoint", { n: message.source.folded ?? 0 })}
           </summary>
           <pre className="note-body">{String(message.content ?? "")}</pre>

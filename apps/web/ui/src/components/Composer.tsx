@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { ICON, MaoButton, MaoIcon as Icon, MaoTextArea } from "maotaui";
+import { useRef, useState } from "react";
 
 import { useT } from "../lib/i18n.ts";
+import { maoValue, useMaoEvents } from "../lib/maoEvents.ts";
 import type { AppInfo, ContextView, ModelRoute } from "../lib/rpc.ts";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { GitControls } from "./GitControls.tsx";
@@ -63,6 +63,8 @@ export function Composer({
   const [text, setText] = useState("");
   const [projectOpen, setProjectOpen] = useState(false);
   const [projectQuery, setProjectQuery] = useState("");
+  const textRef = useRef<HTMLElement>(null);
+  useMaoEvents(textRef, { "mt-input": (event) => setText(maoValue(event)) });
   const permissionOption = PERMISSION_OPTIONS.find((option) => option.value === permission) ?? PERMISSION_OPTIONS[0]!;
   const project = cwd === ""
     ? t("chatWorkspace")
@@ -101,9 +103,9 @@ export function Composer({
           onClose={() => setProjectOpen(false)}
           label={
             <>
-              <Icon name={ICON.folder} className="icon icon-sm" />
+              <mao-icon name="folder" className="icon icon-sm" />
               <span>{project}</span>
-              <Icon name={ICON.chevronDown} className="icon icon-sm" />
+              <mao-icon name="chevron-down" className="icon icon-sm" />
             </>
           }
         >
@@ -124,11 +126,11 @@ export function Composer({
                 setProjectOpen(false);
               }}
             >
-              <Icon name={ICON.chat} className="icon option-icon" />
+              <mao-icon name="message-square" className="icon option-icon" />
               <span className="option-text">
                 <span className="option-name">{t("chatWorkspace")}</span>
               </span>
-              {cwd === "" ? <Icon name={ICON.check} className="icon icon-sm option-check" /> : null}
+              {cwd === "" ? <mao-icon name="check" className="icon icon-sm option-check" /> : null}
             </button>
             {visibleProjects.map((path) => (
               <button
@@ -140,12 +142,12 @@ export function Composer({
                   setProjectOpen(false);
                 }}
               >
-                <Icon name={ICON.folder} className="icon option-icon" />
+                <mao-icon name="folder" className="icon option-icon" />
                 <span className="option-text">
                   <span className="option-name">{names[path] ?? path.split(/[\\/]+/).filter(Boolean).at(-1) ?? path}</span>
                   <span className="option-path">{path}</span>
                 </span>
-                {cwd === path ? <Icon name={ICON.check} className="icon icon-sm option-check" /> : null}
+                {cwd === path ? <mao-icon name="check" className="icon icon-sm option-check" /> : null}
               </button>
             ))}
           </div>
@@ -157,21 +159,21 @@ export function Composer({
               onPickProject();
             }}
           >
-            <Icon name={ICON.plus} className="icon icon-sm" />
+            <mao-icon name="plus" className="icon icon-sm" />
             {t("addProject")}
           </button>
         </Popover>
       </div>
 
       <div className="composer-card">
-        <MaoTextArea
+        <mao-text-area
+          ref={textRef}
           className="composer-text"
           rows={3}
           aria-label={t("inputPlaceholder")}
           placeholder={t(inConversation ? "composerChatPlaceholder" : "composerIdeaPlaceholder")}
           value={text}
           disabled={running || blocked}
-          onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
@@ -189,9 +191,9 @@ export function Composer({
               onChange={onPermission}
               label={
                 <>
-                  <Icon name={ICON.cpu} className="icon icon-sm" />
+                  <mao-icon name="cpu" className="icon icon-sm" />
                   <span>Agent</span>
-                  <Icon name={ICON.chevronDown} className="icon icon-sm" />
+                  <mao-icon name="chevron-down" className="icon icon-sm" />
                 </>
               }
             />
@@ -208,19 +210,19 @@ export function Composer({
           <div className="composer-actions">
             {context === null ? null : <ContextMeter context={context} running={running} onCompact={onCompact} />}
             {running ? (
-              <MaoButton className="composer-send" aria-label={t("stop")} onClick={onCancel}>
-                <Icon name={ICON.square} size={12} />
-              </MaoButton>
+              <mao-button className="composer-send" aria-label={t("stop")} onClick={onCancel}>
+                <mao-icon name="square" size={12} />
+              </mao-button>
             ) : (
-              <MaoButton
+              <mao-button
                 className="composer-send"
                 color="primary"
                 aria-label={t("send")}
                 disabled={blocked || !hasModel || text.trim() === ""}
                 onClick={submit}
               >
-                <Icon name={ICON.arrowUp} size={16} />
-              </MaoButton>
+                <mao-icon name="arrow-up" size={16} />
+              </mao-button>
             )}
           </div>
         </div>
@@ -228,11 +230,11 @@ export function Composer({
 
       <div className="composer-meta">
         <span className="composer-mode">
-          <Icon name={ICON.cpu} className="icon icon-sm" />
+          <mao-icon name="cpu" className="icon icon-sm" />
           <span>Agent</span>
         </span>
         <span className="composer-status-separator" aria-hidden="true" />
-        <span className="composer-permission"><Icon name={permissionOption.icon} className="icon icon-sm" />{t(permissionOption.name)}</span>
+        <span className="composer-permission"><mao-icon name={permissionOption.icon} className="icon icon-sm" />{t(permissionOption.name)}</span>
         {!hasModel ? <span className="composer-warning">{t("modelsEmptyTitle")}</span> : null}
         <GitControls cwd={cwd} enabled={info?.capabilities?.git !== undefined} onOpenWorktree={onOpenWorktree} />
       </div>

@@ -1,5 +1,3 @@
-import { ICON, MaoButton, MaoIcon as Icon } from "maotaui";
-
 import type { AppInfo, Approval, ContextView, ModelRoute, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
@@ -108,11 +106,11 @@ export function ChatView({
 
       {kernelError === null ? null : (
         <div className="banner banner-error">
-          <Icon name={ICON.alert} className="icon icon-sm" />
+          <mao-icon name="triangle-alert" className="icon icon-sm" />
           <span>{kernelError}</span>
-          <MaoButton variant="ghost" size="sm" onClick={onRetry}>
+          <mao-button variant="bordered" size="sm" onClick={onRetry}>
             {t("retry")}
-          </MaoButton>
+          </mao-button>
         </div>
       )}
 
@@ -133,7 +131,7 @@ export function ChatView({
           />
           {failure === null ? null : (
             <div className="banner banner-error">
-              <Icon name={ICON.alert} className="icon icon-sm" />
+              <mao-icon name="triangle-alert" className="icon icon-sm" />
               <span>{failure}</span>
             </div>
           )}

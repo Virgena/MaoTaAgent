@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ICON, MaoIcon as Icon } from "maotaui";
 
 import { useT } from "../lib/i18n.ts";
 import { call, type SkillSummary } from "../lib/rpc.ts";
@@ -55,7 +54,7 @@ export function SkillPicker({
         setQuery("");
       }}
       onClose={() => setOpen(false)}
-      label={<Icon name={ICON.plus} className="icon icon-sm" />}
+      label={<mao-icon name="plus" className="icon icon-sm" />}
     >
       <div className="popover-head">
         <span>{t("skillInsert")}</span>

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ICON, MaoButton, MaoIcon as Icon, MaoSelect, MaoTextField } from "maotaui";
 
 import { describe } from "../lib/errors.ts";
 import { useT } from "../lib/i18n.ts";
+import { maoValue, useMaoEvents } from "../lib/maoEvents.ts";
 import { call, type GitStatusView, type GitWorktreeView } from "../lib/rpc.ts";
 import { Popover } from "./Popover.tsx";
 
@@ -51,6 +51,15 @@ function WorktreeDialog({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const baseRef = useRef<HTMLElement>(null);
+  const branchRef = useRef<HTMLElement>(null);
+  const pathRef = useRef<HTMLElement>(null);
+  useMaoEvents(baseRef, { "mt-change": (event) => setBase(maoValue(event)) });
+  useMaoEvents(branchRef, { "mt-input": (event) => setBranch(maoValue(event)) });
+  useMaoEvents(pathRef, { "mt-input": (event) => setPath(maoValue(event)) });
+  useEffect(() => {
+    branchRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     previous.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -122,42 +131,33 @@ function WorktreeDialog({
         <div className="worktree-head">
           <div className="worktree-title" id="worktree-title">{t("newWorktreeTitle")}</div>
           <button type="button" className="side-icon" title={t("close")} aria-label={t("close")} onClick={onClose}>
-            <Icon name={ICON.close} />
+            <mao-icon name="x" />
           </button>
         </div>
         <div className="worktree-note">{t("newWorktreeNote")}</div>
-        <MaoSelect
+        <mao-select
+          ref={baseRef}
           label={t("baseBranch")}
           value={base}
-          options={[
+          options={JSON.stringify([
             ...(status.detached ? [{ value: "HEAD", label: t("detachedHead") }] : []),
             ...status.branches.map((item) => ({ value: item, label: item })),
-          ]}
-          onChange={(event) => setBase(event.target.value)}
+          ])}
         />
-        <MaoTextField
-          autoFocus
-          label={t("branchName")}
-          value={branch}
-          onChange={(event) => setBranch(event.target.value)}
-        />
-        <MaoTextField
-          label={t("worktreePath")}
-          value={path}
-          onChange={(event) => setPath(event.target.value)}
-        />
+        <mao-text-field ref={branchRef} label={t("branchName")} value={branch} />
+        <mao-text-field ref={pathRef} label={t("worktreePath")} value={path} />
         {error === null ? null : <div className="worktree-error">{error}</div>}
         <div className="worktree-actions">
-          <MaoButton size="sm" variant="flat" onClick={onClose}>{t("cancel")}</MaoButton>
-          <MaoButton
-            type="submit"
+          <mao-button size="sm" variant="flat" onClick={onClose}>{t("cancel")}</mao-button>
+          <mao-button
             size="sm"
             color="primary"
             loading={busy}
             disabled={branch.trim() === "" || path.trim() === "" || base === ""}
+            onClick={() => void create()}
           >
             {t("createWorktree")}
-          </MaoButton>
+          </mao-button>
         </div>
       </form>
     </div>,
@@ -250,14 +250,14 @@ export function GitControls({
           open={modeOpen}
           onToggle={() => setModeOpen((was) => !was)}
           onClose={() => setModeOpen(false)}
-          label={<><Icon name={ICON.gitBranch} className="icon icon-sm" /><span>{t("branch")}</span></>}
+          label={<><mao-icon name="git-branch" className="icon icon-sm" /><span>{t("branch")}</span></>}
         >
           <button
             type="button"
             className="git-mode-row"
             onClick={() => void refreshAndOpenBranches()}
           >
-            <Icon name={ICON.folder} className="icon" />
+            <mao-icon name="folder" className="icon" />
             <span className="git-mode-copy">
               <span className="git-mode-title">{t("branch")}</span>
               <span className="git-mode-note">{t("branchDescription")}</span>
@@ -272,7 +272,7 @@ export function GitControls({
               setWorktreeOpen(true);
             }}
           >
-            <Icon name={ICON.gitWorktree} className="icon" />
+            <mao-icon name="git-fork" className="icon" />
             <span className="git-mode-copy">
               <span className="git-mode-title">{t("newWorktree")}</span>
               <span className="git-mode-note">{t("worktreeDescription")}</span>
@@ -290,15 +290,15 @@ export function GitControls({
             else void refreshAndOpenBranches();
           }}
           onClose={() => setBranchesOpen(false)}
-          label={<><Icon name={ICON.gitBranch} className="icon icon-sm" /><span>{branchName}</span></>}
+          label={<><mao-icon name="git-branch" className="icon icon-sm" /><span>{branchName}</span></>}
         >
           <div className="git-branch-list">
             {status.branches.map((branch) => (
               <div key={branch} className={`git-branch-row${branch === status.branch ? " is-on" : ""}`}>
                 <button type="button" className="git-branch-pick" disabled={busy} onClick={() => void switchTo(branch)}>
-                  <Icon name={ICON.gitBranch} className="icon icon-sm" />
+                  <mao-icon name="git-branch" className="icon icon-sm" />
                   <span>{branch}</span>
-                  {branch === status.branch ? <Icon name={ICON.check} className="icon icon-sm option-check" /> : null}
+                  {branch === status.branch ? <mao-icon name="check" className="icon icon-sm option-check" /> : null}
                 </button>
                 {branch === status.branch ? (
                   <button
@@ -308,7 +308,7 @@ export function GitControls({
                     aria-label={t("copyBranch")}
                     onClick={() => void copyBranch()}
                   >
-                    <Icon name={copied ? ICON.check : ICON.copy} className="icon icon-sm" />
+                    <mao-icon name={copied ? "check" : "copy"} className="icon icon-sm" />
                   </button>
                 ) : null}
               </div>

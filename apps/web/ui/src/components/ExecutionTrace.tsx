@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ICON, MaoIcon as Icon } from "maotaui";
 
 import {
   groupTraceTools,
@@ -45,8 +44,8 @@ function duration(ms: number | undefined): string {
 function StatusMark({ tool }: { tool: LiveTool }) {
   const status = toolStatus(tool);
   if (status === "running") return <span className="trace-spinner" aria-hidden="true" />;
-  if (status === "failed") return <Icon name={ICON.alert} className="icon icon-sm trace-error-icon" />;
-  return <Icon name={ICON.check} className="icon icon-sm trace-check-icon" />;
+  if (status === "failed") return <mao-icon name="triangle-alert" className="icon icon-sm trace-error-icon" />;
+  return <mao-icon name="check" className="icon icon-sm trace-check-icon" />;
 }
 
 function ContentField({
@@ -126,7 +125,7 @@ function ToolTrace({
         <span className="trace-action">{t(ACTION_KEY[kind])}</span>
         {target === "" ? null : <code className="trace-target">{target}</code>}
         {elapsed === "" ? null : <span className="trace-duration">{elapsed}</span>}
-        <Icon name={open ? ICON.chevronDown : ICON.chevronRight} className="icon icon-sm trace-caret" />
+        <mao-icon name={open ? "chevron-down" : "chevron-right"} className="icon icon-sm trace-caret" />
       </button>
       {open ? (
         <div className="trace-tool-body">
@@ -272,7 +271,7 @@ export function ExecutionTrace({
             {step === undefined || step === 0 ? null : <span>{t("traceSteps", { n: step })}</span>}
             <span>{t("traceTools", { n: tools.length })}</span>
             {elapsed === undefined ? null : <span className="trace-duration">{duration(elapsed)}</span>}
-            <Icon name={open ? ICON.chevronDown : ICON.chevronRight} className="icon icon-sm trace-caret" />
+            <mao-icon name={open ? "chevron-down" : "chevron-right"} className="icon icon-sm trace-caret" />
           </button>
         </div>
 
@@ -287,15 +286,15 @@ export function ExecutionTrace({
                   disabled={reasoning === undefined || reasoning.trim() === ""}
                   onClick={() => setThinkingOpen((current) => !current)}
                 >
-                  <Icon name={ICON.bulb} className="icon icon-sm" />
+                  <mao-icon name="lightbulb" className="icon icon-sm" />
                   <span>
                     {running
                       ? t("thinkingNow")
                       : t("thoughtFor", { n: Math.max(1, Math.round(thought / 1000)) })}
                   </span>
                   {reasoning === undefined || reasoning.trim() === "" ? null : (
-                    <Icon
-                      name={thinkingOpen ? ICON.chevronDown : ICON.chevronRight}
+                    <mao-icon
+                      name={thinkingOpen ? "chevron-down" : "chevron-right"}
                       className="icon icon-sm trace-caret"
                     />
                   )}
@@ -317,7 +316,7 @@ export function ExecutionTrace({
                     aria-expanded={expanded}
                     onClick={() => setGroupOpen((current) => ({ ...current, [entry.id]: !expanded }))}
                   >
-                    <Icon name={expanded ? ICON.chevronDown : ICON.chevronRight} className="icon icon-sm" />
+                    <mao-icon name={expanded ? "chevron-down" : "chevron-right"} className="icon icon-sm" />
                     <span>{t("explored", { n: entry.tools.length })}</span>
                   </button>
                   {expanded ? <div className="trace-group-body">{entry.tools.map(renderTool)}</div> : null}
@@ -351,7 +350,7 @@ export function ExecutionTrace({
                 title={t("close")}
                 onClick={() => setFullText(null)}
               >
-                <Icon name={ICON.close} />
+                <mao-icon name="x" />
               </button>
             </header>
             <pre className="trace-full-body">{fullText.text}</pre>

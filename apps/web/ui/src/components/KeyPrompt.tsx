@@ -1,9 +1,8 @@
-import { useState } from "react";
-
-import { MaoButton, MaoTextField } from "maotaui";
+import { useRef, useState } from "react";
 
 import { describe } from "../lib/errors.ts";
 import { useT } from "../lib/i18n.ts";
+import { maoValue, useMaoEvents } from "../lib/maoEvents.ts";
 import { call } from "../lib/rpc.ts";
 
 export function KeyPrompt({ onSaved }: { onSaved: () => void }) {
@@ -11,6 +10,8 @@ export function KeyPrompt({ onSaved }: { onSaved: () => void }) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const fieldRef = useRef<HTMLElement>(null);
+  useMaoEvents(fieldRef, { "mt-input": (event) => setValue(maoValue(event)) });
 
   const save = async (): Promise<void> => {
     if (busy || value.trim() === "") return;
@@ -35,16 +36,22 @@ export function KeyPrompt({ onSaved }: { onSaved: () => void }) {
         void save();
       }}
     >
-      <MaoTextField
+      <mao-text-field
+        ref={fieldRef}
         type="password"
         value={value}
         placeholder="sk-…"
-        autoComplete="off"
-        onChange={(event) => setValue(event.target.value)}
+        autocomplete="off"
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void save();
+          }
+        }}
       />
-      <MaoButton size="sm" disabled={busy || value.trim() === ""}>
+      <mao-button size="sm" disabled={busy || value.trim() === ""} onClick={() => void save()}>
         {busy ? t("saving") : t("save")}
-      </MaoButton>
+      </mao-button>
       {failure === null ? null : <span className="key-failure">{failure}</span>}
     </form>
   );

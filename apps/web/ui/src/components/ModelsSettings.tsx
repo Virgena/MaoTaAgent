@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ICON, MaoButton, MaoIcon as Icon, MaoSelect, MaoTextField } from "maotaui";
-
 import { useT } from "../lib/i18n.ts";
+import { useMaoChange, useMaoInput } from "../lib/maoEvents.ts";
 import { call, type AdapterView, type ModelCatalogView, type ModelProviderView, type ModelView } from "../lib/rpc.ts";
 import { describe } from "../lib/errors.ts";
 import { Popover } from "./Popover.tsx";
@@ -100,6 +99,28 @@ export function ModelsSettings({
   const configurableProviders = catalog?.providers ?? [];
   const editorOpen = editor !== null;
 
+  const patchProvider = (field: keyof ProviderDraft, value: string): void =>
+    setEditor((current) => current?.kind === "provider" ? { kind: "provider", draft: { ...current.draft, [field]: value } } : current);
+  const patchModel = (field: keyof ModelDraft, value: string): void =>
+    setEditor((current) => current?.kind === "model" ? { kind: "model", draft: { ...current.draft, [field]: value } } : current);
+  const setAuthKind = (value: string): void =>
+    setEditor((current) => current?.kind === "provider"
+      ? { kind: "provider", draft: { ...current.draft, auth_kind: value === "env" ? "env" : "file" } }
+      : current);
+
+  const adapterRef = useMaoChange((value) => patchProvider("adapter", value));
+  const providerNameRef = useMaoInput((value) => patchProvider("name", value));
+  const baseUrlRef = useMaoInput((value) => patchProvider("base_url", value));
+  const authKindRef = useMaoChange(setAuthKind);
+  const envNameRef = useMaoInput((value) => patchProvider("env_name", value));
+  const apiKeyRef = useMaoInput((value) => patchProvider("api_key", value));
+  const modelProviderRef = useMaoChange((value) => patchModel("provider", value));
+  const modelIdRef = useMaoInput((value) => patchModel("model", value));
+  const modelNameRef = useMaoInput((value) => patchModel("name", value));
+  const contextRef = useMaoInput((value) => patchModel("context_tokens", value));
+  const maxOutputRef = useMaoInput((value) => patchModel("max_output_tokens", value));
+  const effortsRef = useMaoInput((value) => patchModel("reasoning_efforts", value));
+
   useEffect(() => {
     if (!editorOpen) return;
     const close = (event: KeyboardEvent): void => {
@@ -119,7 +140,7 @@ export function ModelsSettings({
     if (!editorOpen) return;
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const frame = window.requestAnimationFrame(() => {
-      editorDialog.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
+      editorDialog.current?.querySelector<HTMLElement>("mao-select, mao-text-field, mao-text-area, button")?.focus();
     });
     return () => {
       window.cancelAnimationFrame(frame);
@@ -289,14 +310,14 @@ export function ModelsSettings({
               <form className="model-editor" onSubmit={(event) => { event.preventDefault(); void saveProvider(); }}>
                 <div className="model-editor-title" id="model-editor-title">{editor.draft.id === "" ? t("addProvider") : t("editProvider")}</div>
           <div className="model-form-grid">
-            <MaoSelect label={t("adapter")} value={editor.draft.adapter} options={adapters.map((adapter) => ({ value: adapter.id, label: adapter.name }))} onChange={(event) => setEditor({ kind: "provider", draft: { ...editor.draft, adapter: event.target.value } })} />
-            <MaoTextField label={t("providerName")} value={editor.draft.name} onChange={(event) => setEditor({ kind: "provider", draft: { ...editor.draft, name: event.target.value } })} />
-            <MaoTextField label={t("baseUrl")} value={editor.draft.base_url} onChange={(event) => setEditor({ kind: "provider", draft: { ...editor.draft, base_url: event.target.value } })} />
-            <MaoSelect label={t("keySource")} value={editor.draft.auth_kind} options={[{ value: "file", label: t("keySourceFile") }, { value: "env", label: t("keySourceEnv") }]} onChange={(event) => setEditor({ kind: "provider", draft: { ...editor.draft, auth_kind: event.target.value as "file" | "env" } })} />
+            <mao-select ref={adapterRef} label={t("adapter")} value={editor.draft.adapter} options={JSON.stringify(adapters.map((adapter) => ({ value: adapter.id, label: adapter.name })))} />
+            <mao-text-field ref={providerNameRef} label={t("providerName")} value={editor.draft.name} />
+            <mao-text-field ref={baseUrlRef} label={t("baseUrl")} value={editor.draft.base_url} />
+            <mao-select ref={authKindRef} label={t("keySource")} value={editor.draft.auth_kind} options={JSON.stringify([{ value: "file", label: t("keySourceFile") }, { value: "env", label: t("keySourceEnv") }])} />
             {editor.draft.auth_kind === "env" ? (
-              <MaoTextField label={t("keyEnv")} value={editor.draft.env_name} onChange={(event) => setEditor({ kind: "provider", draft: { ...editor.draft, env_name: event.target.value } })} />
+              <mao-text-field ref={envNameRef} label={t("keyEnv")} value={editor.draft.env_name} />
             ) : (
-              <MaoTextField label={t("apiKey")} type="password" autoComplete="new-password" value={editor.draft.api_key} onChange={(event) => setEditor({ kind: "provider", draft: { ...editor.draft, api_key: event.target.value } })} />
+              <mao-text-field ref={apiKeyRef} label={t("apiKey")} type="password" autocomplete="new-password" value={editor.draft.api_key} />
             )}
           </div>
           {discovered.length === 0 ? null : (
@@ -304,19 +325,19 @@ export function ModelsSettings({
               <span className="model-discovered-title">{t("discoveredModels")}</span>
               <div className="model-discovered-list">
                 {discovered.map((model) => (
-                  <MaoButton key={model.id} size="sm" variant="bordered" color={pickedModel?.id === model.id ? "primary" : "neutral"} onClick={() => setPickedModel(model)}>
-                    {pickedModel?.id === model.id ? <Icon name={ICON.check} className="icon icon-sm" /> : null}
+                  <mao-button key={model.id} size="sm" variant="bordered" color={pickedModel?.id === model.id ? "primary" : "neutral"} onClick={() => setPickedModel(model)}>
+                    {pickedModel?.id === model.id ? <mao-icon name="check" className="icon icon-sm" /> : null}
                     {model.name ?? model.id}
-                  </MaoButton>
+                  </mao-button>
                 ))}
               </div>
             </div>
           )}
           <div className="model-editor-actions">
-            <MaoButton size="sm" variant="bordered" loading={busy} onClick={() => void discover()}>{t("discoverModels")}</MaoButton>
+            <mao-button size="sm" variant="bordered" loading={busy} onClick={() => void discover()}>{t("discoverModels")}</mao-button>
             <div className="model-editor-actions-right">
-              <MaoButton size="sm" variant="flat" onClick={() => setEditor(null)}>{t("cancel")}</MaoButton>
-              <MaoButton type="submit" size="sm" color="primary" disabled={busy || editor.draft.name === "" || editor.draft.base_url === ""}>{t("save")}</MaoButton>
+              <mao-button size="sm" variant="flat" onClick={() => setEditor(null)}>{t("cancel")}</mao-button>
+              <mao-button size="sm" color="primary" disabled={busy || editor.draft.name === "" || editor.draft.base_url === ""} onClick={() => void saveProvider()}>{t("save")}</mao-button>
             </div>
           </div>
         </form>
@@ -324,12 +345,12 @@ export function ModelsSettings({
         <form className="model-editor" onSubmit={(event) => { event.preventDefault(); void saveModel(); }}>
           <div className="model-editor-title" id="model-editor-title">{editor.draft.model === "" ? t("addModel") : t("editModel")}</div>
           <div className="model-form-grid">
-            <MaoSelect label={t("modelProvider")} value={editor.draft.provider} options={configurableProviders.map((provider) => ({ value: provider.id, label: provider.name }))} onChange={(event) => setEditor({ kind: "model", draft: { ...editor.draft, provider: event.target.value } })} />
-            <MaoTextField label={t("modelId")} value={editor.draft.model} onChange={(event) => setEditor({ kind: "model", draft: { ...editor.draft, model: event.target.value } })} />
-            <MaoTextField label={t("modelName")} value={editor.draft.name} onChange={(event) => setEditor({ kind: "model", draft: { ...editor.draft, name: event.target.value } })} />
-            <MaoTextField label={t("contextTokens")} inputMode="numeric" value={editor.draft.context_tokens} onChange={(event) => setEditor({ kind: "model", draft: { ...editor.draft, context_tokens: event.target.value } })} />
-            <MaoTextField label={t("maxOutputTokens")} inputMode="numeric" value={editor.draft.max_output_tokens} onChange={(event) => setEditor({ kind: "model", draft: { ...editor.draft, max_output_tokens: event.target.value } })} />
-            <MaoTextField label={t("reasoningEfforts")} placeholder="low, medium, high" value={editor.draft.reasoning_efforts} onChange={(event) => setEditor({ kind: "model", draft: { ...editor.draft, reasoning_efforts: event.target.value } })} />
+            <mao-select ref={modelProviderRef} label={t("modelProvider")} value={editor.draft.provider} options={JSON.stringify(configurableProviders.map((provider) => ({ value: provider.id, label: provider.name })))} />
+            <mao-text-field ref={modelIdRef} label={t("modelId")} value={editor.draft.model} />
+            <mao-text-field ref={modelNameRef} label={t("modelName")} value={editor.draft.name} />
+            <mao-text-field ref={contextRef} label={t("contextTokens")} value={editor.draft.context_tokens} />
+            <mao-text-field ref={maxOutputRef} label={t("maxOutputTokens")} value={editor.draft.max_output_tokens} />
+            <mao-text-field ref={effortsRef} label={t("reasoningEfforts")} placeholder="low, medium, high" value={editor.draft.reasoning_efforts} />
           </div>
           <div className="model-checks">
             <label><input type="checkbox" checked={editor.draft.tools} onChange={(event) => setEditor({ kind: "model", draft: { ...editor.draft, tools: event.target.checked } })} />{t("tools")}</label>
@@ -337,8 +358,8 @@ export function ModelsSettings({
           </div>
           <div className="model-editor-actions">
             <div className="model-editor-actions-right">
-              <MaoButton size="sm" variant="flat" onClick={() => setEditor(null)}>{t("cancel")}</MaoButton>
-              <MaoButton type="submit" size="sm" color="primary" disabled={busy || editor.draft.provider === "" || editor.draft.model === ""}>{t("save")}</MaoButton>
+              <mao-button size="sm" variant="flat" onClick={() => setEditor(null)}>{t("cancel")}</mao-button>
+              <mao-button size="sm" color="primary" disabled={busy || editor.draft.provider === "" || editor.draft.model === ""} onClick={() => void saveModel()}>{t("save")}</mao-button>
             </div>
           </div>
         </form>
@@ -349,21 +370,21 @@ export function ModelsSettings({
 
       <div className="models-toolbar">
         <label className="models-search">
-          <Icon name={ICON.search} className="icon icon-sm" />
+          <mao-icon name="search" className="icon icon-sm" />
           <input value={query} placeholder={t("searchModels")} aria-label={t("searchModels")} onChange={(event) => setQuery(event.target.value)} />
         </label>
         <div className="models-toolbar-actions">
-          <MaoButton size="sm" variant="bordered" onClick={openNewProvider}>{t("addProvider")}</MaoButton>
-          <MaoButton size="sm" variant="bordered" disabled={configurableProviders.length === 0} onClick={() => openNewModel()}>{t("addModel")}</MaoButton>
+          <mao-button size="sm" variant="bordered" onClick={openNewProvider}>{t("addProvider")}</mao-button>
+          <mao-button size="sm" variant="bordered" disabled={configurableProviders.length === 0} onClick={() => openNewModel()}>{t("addModel")}</mao-button>
         </div>
       </div>
 
       {error === null ? null : <div className="model-error">{error}</div>}
       {configurableProviders.length === 0 ? (
         <div className="models-empty">
-          <div className="models-empty-mark"><Icon name={ICON.cpu} size={20} /></div>
+          <div className="models-empty-mark"><mao-icon name="cpu" size={20} /></div>
           <div className="models-empty-title">{t("modelsEmptyTitle")}</div>
-          <MaoButton size="sm" color="primary" onClick={openNewProvider}>{t("addProvider")}</MaoButton>
+          <mao-button size="sm" color="primary" onClick={openNewProvider}>{t("addProvider")}</mao-button>
         </div>
       ) : visibleProviders.length === 0 ? (
         <div className="models-no-results">{t("noModels")}</div>
@@ -405,7 +426,7 @@ export function ModelsSettings({
                       open={menu === `provider:${provider.id}`}
                       onToggle={() => setMenu(menu === `provider:${provider.id}` ? null : `provider:${provider.id}`)}
                       onClose={() => setMenu(null)}
-                      label={<Icon name={ICON.more} className="icon icon-sm" />}
+                      label={<mao-icon name="ellipsis" className="icon icon-sm" />}
                     >
                       <button type="button" className="option" onClick={() => { setMenu(null); setEditor({ kind: "provider", draft: providerDraft(provider) }); }}>{t("editProvider")}</button>
                       <button type="button" className="option" onClick={() => { setMenu(null); void removeProvider(provider); }}>{t("delete")}</button>
@@ -417,7 +438,7 @@ export function ModelsSettings({
                       aria-expanded={open}
                       onClick={() => setExpanded((was) => ({ ...was, [provider.id]: !open }))}
                     >
-                      <Icon name={open ? ICON.chevronDown : ICON.chevronRight} className="icon icon-sm" />
+                      <mao-icon name={open ? "chevron-down" : "chevron-right"} className="icon icon-sm" />
                     </button>
                   </div>
                 </div>
@@ -454,7 +475,7 @@ export function ModelsSettings({
                             open={menu === `model:${model.provider}/${model.model}`}
                             onToggle={() => setMenu(menu === `model:${model.provider}/${model.model}` ? null : `model:${model.provider}/${model.model}`)}
                             onClose={() => setMenu(null)}
-                            label={<Icon name={ICON.more} className="icon icon-sm" />}
+                            label={<mao-icon name="ellipsis" className="icon icon-sm" />}
                           >
                             <button type="button" className="option" onClick={() => { setMenu(null); setEditor({ kind: "model", draft: modelDraft(model.provider, model) }); }}>{t("editModel")}</button>
                             <button type="button" className="option" onClick={() => { setMenu(null); void removeModel(model); }}>{t("delete")}</button>
@@ -466,7 +487,7 @@ export function ModelsSettings({
                   {models.length === 0 ? (
                     <div className="models-provider-empty">
                       <span>{t("modelsProviderEmpty")}</span>
-                      <MaoButton size="sm" variant="bordered" onClick={() => openNewModel(provider.id)}>{t("addModel")}</MaoButton>
+                      <mao-button size="sm" variant="bordered" onClick={() => openNewModel(provider.id)}>{t("addModel")}</mao-button>
                     </div>
                   ) : null}
                 </div> : null}

@@ -1,5 +1,3 @@
-import { ICON, MaoButton, MaoIcon as Icon } from "maotaui";
-
 import { useT } from "../lib/i18n.ts";
 import type { Approval } from "../lib/rpc.ts";
 
@@ -15,7 +13,7 @@ export function ApprovalCard({
   return (
     <div className="approval">
       <div className="approval-head">
-        <Icon name={ICON.alert} className="icon icon-sm" />
+        <mao-icon name="triangle-alert" className="icon icon-sm" />
         <span className="approval-title">{t("approvalTitle")}</span>
       </div>
       <div className="approval-tool">{t("approvalTool", { tool: approval.tool })}</div>
@@ -38,12 +36,12 @@ export function ApprovalCard({
       )}
       <div className="approval-actions">
         <span className="approval-hint">{t("approvalHint")}</span>
-        <MaoButton variant="danger" size="sm" onClick={() => onAnswer(approval.id, "deny")}>
+        <mao-button color="danger" variant="bordered" size="sm" onClick={() => onAnswer(approval.id, "deny")}>
           {t("approvalDeny")}
-        </MaoButton>
-        <MaoButton variant="primary" size="sm" onClick={() => onAnswer(approval.id, "allow")}>
+        </mao-button>
+        <mao-button size="sm" onClick={() => onAnswer(approval.id, "allow")}>
           {t("approvalAllow")}
-        </MaoButton>
+        </mao-button>
       </div>
     </div>
   );
