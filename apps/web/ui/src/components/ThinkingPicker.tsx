@@ -97,7 +97,6 @@ export function ThinkingPicker({
       onClose={close}
       label={
         <>
-          <mao-icon name="cpu" className="icon icon-sm" />
           <span className="model-reason-trigger-name">{modelName}</span>
           {showReasoning ? (
             <>
@@ -111,7 +110,7 @@ export function ThinkingPicker({
               <span className="model-reason-trigger-capacity">{capacity}</span>
             </>
           )}
-          <mao-icon name="chevron-down" className="icon icon-sm" />
+          <mao-icon name="chevron-down" size={14} />
         </>
       }
     >
@@ -136,7 +135,7 @@ export function ThinkingPicker({
                 onOpenModels();
               }}
             >
-              <mao-icon name="plus" className="icon icon-sm" />
+              <mao-icon name="plus" size={14} />
             </mao-button>
             <mao-button
               className="mt-btn-icon"
@@ -146,7 +145,7 @@ export function ThinkingPicker({
               aria-label={t("searchModels")}
               onClick={() => setSearchOpen((was) => !was)}
             >
-              <mao-icon name="search" className="icon icon-sm" />
+              <mao-icon name="search" size={14} />
             </mao-button>
           </div>
           {searchOpen ? (
@@ -178,17 +177,17 @@ export function ThinkingPicker({
                   }}
                 >
                   <span className="model-menu-check">
-                    {current ? <mao-icon name="check" className="icon icon-sm" /> : null}
+                    {current ? <mao-icon name="check" size={14} /> : null}
                   </span>
                   <span className="model-menu-name">{model.name}</span>
                   {meta === "" ? null : <span className="model-menu-meta">{meta}</span>}
-                  <mao-icon name="chevron-right" className="icon icon-sm" />
+                  <mao-icon name="chevron-right" size={14} />
                 </button>
               );
             })}
           </div>
           <button type="button" className="model-menu-footer" onClick={() => setView("detail")}>
-            <span className="model-menu-chip"><mao-icon name="cpu" className="icon icon-sm" />{modelName}</span>
+            <span className="model-menu-chip">{modelName}</span>
             <span className="model-menu-chip">
               {showReasoning ? `${levelName(thinking)} · ` : ""}{capacity === "" ? t("model") : capacity}
             </span>
@@ -197,7 +196,7 @@ export function ThinkingPicker({
       ) : (
         <>
           <button type="button" className="model-detail-back" onClick={() => setView("models")}>
-            <mao-icon name="arrow-left" className="icon icon-sm" />
+            <mao-icon name="chevron-left" size={14} />
             <span>{modelName}</span>
           </button>
           <div className="model-detail-label">{t("reasoningLevel")}</div>
@@ -216,7 +215,7 @@ export function ThinkingPicker({
             <span>{capacity === "" ? "—" : capacity}</span>
           </div>
           <button type="button" className="model-menu-footer" onClick={() => setView("models")}>
-            <span className="model-menu-chip"><mao-icon name="cpu" className="icon icon-sm" />{modelName}</span>
+            <span className="model-menu-chip">{modelName}</span>
             <span className="model-menu-chip">
               {showReasoning ? levelName(thinking) : ""}{capacity === "" ? "" : ` · ${capacity}`}
             </span>

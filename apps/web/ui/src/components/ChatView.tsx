@@ -1,4 +1,4 @@
-import type { AppInfo, Approval, ContextView, ModelRoute, SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import type { AppInfo, Approval, ContextView, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import { useT } from "../lib/i18n.ts";
 import { Composer } from "./Composer.tsx";
 import { RunStatus } from "./ExecutionTrace.tsx";
@@ -13,23 +13,12 @@ export function ChatView({
   pending,
   live,
   failure,
-  projects,
-  names,
-  thinking,
-  modelRoute,
-  permission,
   approvals,
   context,
   onCompact,
   spawned,
   onRetry,
-  onNew,
-  onPickProject,
-  onOpenModels,
   onOpenWorktree,
-  onThinking,
-  onModelRoute,
-  onPermission,
   onAnswer,
   onSend,
   onCancel,
@@ -43,52 +32,28 @@ export function ChatView({
   live: LiveTurn | null;
   failure: string | null;
   hasKey: boolean | null;
-  projects: string[];
-  names: Record<string, string>;
-  thinking: string;
-  modelRoute: ModelRoute | null;
-  permission: string;
   approvals: Approval[];
   context: ContextView | null;
   onCompact: () => void;
   spawned: Record<string, SessionSummary[]>;
   onRetry: () => void;
-  onNew: (cwd: string) => void;
-  onPickProject: () => void;
-  onOpenModels: () => void;
   onOpenWorktree: (path: string) => Promise<void>;
-  onThinking: (level: string) => void;
-  onModelRoute: (route: ModelRoute | null) => void;
-  onPermission: (mode: string) => void;
   onAnswer: (id: string, decision: "allow" | "deny") => void;
   onSend: (text: string) => void;
   onCancel: () => void;
 }) {
   const t = useT();
   const idle = messages.length === 0 && pending === null && live === null;
-  const permissionDisabled = session === null || live?.running === true;
 
   const composer = (
     <Composer
       info={info}
       cwd={session?.cwd ?? ""}
-      thinking={thinking}
-      modelRoute={modelRoute}
-      permission={permission}
-      permissionDisabled={permissionDisabled}
       running={live?.running === true}
       blocked={kernelError !== null}
       context={context}
       inConversation={!idle}
-      projects={projects}
-      names={names}
-      onNew={onNew}
-      onPickProject={onPickProject}
-      onOpenModels={onOpenModels}
       onOpenWorktree={onOpenWorktree}
-      onThinking={onThinking}
-      onModelRoute={onModelRoute}
-      onPermission={onPermission}
       onCompact={onCompact}
       onSend={onSend}
       onCancel={onCancel}
@@ -106,7 +71,7 @@ export function ChatView({
 
       {kernelError === null ? null : (
         <div className="banner banner-error">
-          <mao-icon name="triangle-alert" className="icon icon-sm" />
+          <mao-icon name="triangle-alert" size={14} />
           <span>{kernelError}</span>
           <mao-button variant="bordered" size="sm" onClick={onRetry}>
             {t("retry")}
@@ -131,7 +96,7 @@ export function ChatView({
           />
           {failure === null ? null : (
             <div className="banner banner-error">
-              <mao-icon name="triangle-alert" className="icon icon-sm" />
+              <mao-icon name="triangle-alert" size={14} />
               <span>{failure}</span>
             </div>
           )}

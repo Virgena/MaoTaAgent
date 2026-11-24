@@ -121,6 +121,9 @@ importers:
       dompurify:
         specifier: ^3
         version: 3.4.15
+      maotaui:
+        specifier: 0.3.0
+        version: 0.3.0
       marked:
         specifier: ^16
         version: 16.0.0
@@ -149,9 +152,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^5
         version: 5.2.0(vite@7.3.6(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.33.0)(yaml@2.9.1))
-      maotaui:
-        specifier: link:../../../MaoTaUI
-        version: link:../../../MaoTaUI
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -2492,6 +2492,9 @@ packages:
   magic-string@1.4.5:
     resolution: {integrity: sha512-oLLC2+YvQUfAa+vxoufE/yc1icb87M9iXIRqAoR/2EhE/8cb3SF/+Gi0c2By1B+5Vz2e2vQtUvHiu1+63Znh+w==}
 
+  maotaui@0.3.0:
+    resolution: {integrity: sha512-2hi+UoBpW+O7rn3hpxRnaLjAM5Ug0q1gWY2qy4YC7zm7VdBDzRYv5zeXg3b0Qzf9GG+P4ibWEHPDwE3kvDITWQ==}
+
   markdown-extensions@2.0.0:
     resolution: {integrity: sha512-o5vL7aDWatOTX8LzaS1WMoaoxIiLRQJuIKKe2wAw6IeULDHaqbiqiggmx+pKvZDb1Sj+pE46Sn1T7lCqfFtg1Q==}
     engines: {node: '>=16'}
@@ -4613,6 +4616,8 @@ snapshots:
   magic-string@1.4.5:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
+
+  maotaui@0.3.0: {}
 
   markdown-extensions@2.0.0: {}
 

@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { IconName } from "maotaui";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { useT } from "../lib/i18n.ts";
 import { maoValue, useMaoEvents } from "../lib/maoEvents.ts";
 import type { SessionSummary } from "../lib/rpc.ts";
+import { DEFAULT_TASK_FILTERS, filterTasks } from "../taskList.ts";
 import { useSidebarSections } from "../useSidebarSections.ts";
 import { Popover } from "./Popover.tsx";
+import { TaskFilters } from "./TaskFilters.tsx";
 
 export const DEFAULT_PROJECT = "";
+const RECENT_TASK_LIMIT = 30;
 
 export function projectLabel(cwd: string, fallback = "", name = ""): string {
   if (name !== "") return name;
@@ -42,29 +44,34 @@ function SessionRow({
   onArchive: () => void;
 }) {
   const t = useT();
+  const [menuOpen, setMenuOpen] = useState(false);
   const pinLabel = pinned ? t("unpin") : t("pin");
   const archiveLabel = archived ? t("restore") : t("archive");
 
   return (
     <div className={`side-item side-sub${active ? " is-on" : ""}`}>
       <button type="button" className="side-open" onClick={onOpen}>
+        <mao-icon name="message-square" size={14} className="side-session-icon" />
         <span className="side-name">{session.title === "" ? t("newChat") : session.title}</span>
       </button>
       {running ? <mao-badge tone="accent">{t("running")}</mao-badge> : null}
       <span className="side-acts">
-        <button
-          type="button"
-          className={`side-icon${pinned ? " is-on" : ""}`}
-          title={pinLabel}
-          aria-label={pinLabel}
-          aria-pressed={pinned}
-          onClick={onPin}
+        <Popover
+          className="side-more"
+          title={t("more")}
+          align="end"
+          open={menuOpen}
+          onToggle={() => setMenuOpen((was) => !was)}
+          onClose={() => setMenuOpen(false)}
+          label={<mao-icon name="ellipsis" size={14} />}
         >
-          <mao-icon name="pin" />
-        </button>
-        <button type="button" className="side-icon" title={archiveLabel} aria-label={archiveLabel} onClick={onArchive}>
-          <mao-icon name={archived ? "rotate-ccw" : "archive"} />
-        </button>
+          <button type="button" className="option" onClick={() => { setMenuOpen(false); onPin(); }}>
+            <span className="option-text"><span className="option-name">{pinLabel}</span></span>
+          </button>
+          <button type="button" className="option" onClick={() => { setMenuOpen(false); onArchive(); }}>
+            <span className="option-text"><span className="option-name">{archiveLabel}</span></span>
+          </button>
+        </Popover>
       </span>
     </div>
   );
@@ -72,7 +79,7 @@ function SessionRow({
 
 export function Sidebar({
   groups,
-  chats,
+  recent,
   pinned,
   archived,
   names,
@@ -90,13 +97,14 @@ export function Sidebar({
   onArchive,
   onSettings,
   onPlugins,
+  onScheduled,
   onTasks,
   onSearch,
 }: {
   groups: ProjectGroup[];
-  chats: SessionSummary[];
+  recent: SessionSummary[];
   pinned: SessionSummary[];
-  archived: SessionSummary[];
+  archived: string[];
   names: Record<string, string>;
   activeId: string | null;
   running: string[];
@@ -112,6 +120,7 @@ export function Sidebar({
   onArchive: (id: string) => void;
   onSettings: () => void;
   onPlugins: () => void;
+  onScheduled: () => void;
   onTasks: () => void;
   onSearch: () => void;
 }) {
@@ -120,6 +129,7 @@ export function Sidebar({
   const [menu, setMenu] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [filters, setFilters] = useState(DEFAULT_TASK_FILTERS);
   const draftRef = useRef<HTMLElement>(null);
   const pathRef = useRef<HTMLElement>(null);
   useMaoEvents(draftRef, { "mt-input": (event) => setDraft(maoValue(event)) });
@@ -131,6 +141,33 @@ export function Sidebar({
     if (manual) pathRef.current?.focus();
   }, [manual]);
   const { sections, toggleSection, toggleProject: toggleProjectState } = useSidebarSections();
+  const archivedIds = useMemo(() => new Set(archived), [archived]);
+  const pinnedIds = useMemo(() => new Set(pinned.map((session) => session.id)), [pinned]);
+  const recentRows = useMemo(
+    () => filterTasks(
+      recent.filter((session) => !pinnedIds.has(session.id)),
+      archived,
+      filters,
+      Date.now(),
+      RECENT_TASK_LIMIT,
+    ),
+    [archived, filters, pinnedIds, recent],
+  );
+  const recentGroups = useMemo(() => {
+    if (filters.group === "none") return [{ key: "", label: "", sessions: recentRows }];
+    const grouped = new Map<string, SessionSummary[]>();
+    for (const session of recentRows) {
+      const cwd = session.cwd === "" ? DEFAULT_PROJECT : session.cwd;
+      const rows = grouped.get(cwd) ?? [];
+      rows.push(session);
+      grouped.set(cwd, rows);
+    }
+    return [...grouped].map(([cwd, sessions]) => ({
+      key: cwd,
+      label: cwd === DEFAULT_PROJECT ? "" : projectLabel(cwd, "", names[cwd] ?? ""),
+      sessions,
+    }));
+  }, [filters.group, names, recentRows, t]);
 
   const commit = (cwd: string): void => {
     onRename(cwd, draft.trim());
@@ -143,14 +180,14 @@ export function Sidebar({
     toggleProjectState(cwd);
   };
 
-  const row = (session: SessionSummary, isPinned: boolean, isArchived: boolean) => (
+  const row = (session: SessionSummary, isPinned: boolean) => (
     <SessionRow
       key={session.id}
       session={session}
       active={session.id === activeId}
       running={running.includes(session.id)}
       pinned={isPinned}
-      archived={isArchived}
+      archived={archivedIds.has(session.id)}
       onOpen={() => onOpen(session)}
       onPin={() => onPin(session.id)}
       onArchive={() => onArchive(session.id)}
@@ -160,7 +197,6 @@ export function Sidebar({
   const folder = (
     key: string,
     label: string,
-    icon: IconName,
     open: boolean,
     toggle: () => void,
     children: ReactNode,
@@ -175,8 +211,8 @@ export function Sidebar({
           aria-expanded={open}
           onClick={toggle}
         >
-          <mao-icon name={icon} className="icon side-folder-icon" />
           <span className="side-name">{label}</span>
+          <mao-icon name={open ? "chevron-down" : "chevron-right"} size={14} className="side-folder-icon" />
         </button>
         {actions === undefined ? null : <span className="side-acts">{actions}</span>}
       </div>
@@ -189,21 +225,21 @@ export function Sidebar({
       <div className="side-brand">
         <span>MaoTa</span>
         <button type="button" className="side-icon" title={t("searchChats")} aria-label={t("searchChats")} onClick={onSearch}>
-          <mao-icon name="search" />
+          <mao-icon name="search" size={16} />
         </button>
       </div>
 
       <nav className="side-nav">
         <button type="button" className="side-row" onClick={() => onNew(DEFAULT_PROJECT)}>
-          <mao-icon name="message-square" />
+          <mao-icon name="message-square-plus" size={16} />
           {t("newChat")}
         </button>
-        <button type="button" className="side-row" onClick={onTasks}>
-          <mao-icon name="clock" />
+        <button type="button" className="side-row" onClick={onScheduled}>
+          <mao-icon name="calendar-clock" size={16} />
           {t("tasks")}
         </button>
         <button type="button" className="side-row" onClick={onPlugins}>
-          <mao-icon name="plug" />
+          <mao-icon name="puzzle" size={16} />
           {t("plugins")}
         </button>
       </nav>
@@ -214,31 +250,39 @@ export function Sidebar({
           : folder(
               "pinned",
               t("pinned"),
-              "pin",
               sections.pinned,
               () => toggleSection("pinned"),
-              pinned.map((session) => row(session, true, false)),
+              pinned.map((session) => row(session, true)),
             )}
 
-        {folder(
-          "chats",
-          t("chats"),
-          "message-square",
-          sections.chats,
-          () => toggleSection("chats"),
-          chats.length === 0
-            ? <div className="side-empty">{t("noRecent")}</div>
-            : chats.map((session) => row(session, false, false)),
-          <button
-            type="button"
-            className="side-icon"
-            title={t("newChat")}
-            aria-label={t("newChat")}
-            onClick={() => onNew(DEFAULT_PROJECT)}
-          >
-            <mao-icon name="plus" />
-          </button>,
-        )}
+        <div className="side-recent">
+          <div className="side-item side-folder-row side-recent-header">
+            <button
+              type="button"
+              className="side-open side-folder-toggle"
+              aria-expanded={sections.recent}
+              onClick={() => toggleSection("recent")}
+            >
+              <span className="side-name">{t("recent")}</span>
+              <mao-icon name={sections.recent ? "chevron-down" : "chevron-right"} size={14} className="side-folder-icon" />
+            </button>
+            <TaskFilters value={filters} onChange={setFilters} align="start" outside />
+          </div>
+          {sections.recent ? (
+            <div className="side-recent-list">
+              {recentGroups.map((group) => (
+                <div key={group.key} className="side-recent-group">
+                  {group.label === "" ? null : <div className="side-recent-label">{group.label}</div>}
+                  {group.sessions.map((session) => row(session, false))}
+                </div>
+              ))}
+              <button type="button" className="side-view-all" onClick={onTasks}>
+                {t("viewAll")}
+              </button>
+              {recentRows.length === 0 ? <div className="side-empty">{t("noTasks")}</div> : null}
+            </div>
+          ) : null}
+        </div>
 
         {groups.map((group) => {
           const open = !sections.projects.includes(group.cwd);
@@ -252,7 +296,7 @@ export function Sidebar({
                 aria-label={t("newSession")}
                 onClick={() => onNew(group.cwd)}
               >
-                <mao-icon name="plus" />
+                <mao-icon name="plus" size={14} />
               </button>
               {group.registered ? (
                 <Popover
@@ -262,7 +306,7 @@ export function Sidebar({
                   open={menu === group.cwd}
                   onToggle={() => setMenu(menu === group.cwd ? null : group.cwd)}
                   onClose={() => setMenu(null)}
-                  label={<mao-icon name="ellipsis" />}
+                  label={<mao-icon name="ellipsis" size={14} />}
                 >
                   <button
                     type="button"
@@ -317,17 +361,15 @@ export function Sidebar({
           return folder(
             group.cwd,
             label,
-            open ? "folder-open" : "folder",
             open,
             () => toggleProject(group.cwd),
             group.sessions.length === 0
               ? (
                   <button type="button" className="side-item side-sub side-new" onClick={() => onNew(group.cwd)}>
-                    <mao-icon name="plus" className="icon icon-sm" />
                     <span className="side-name">{t("newChat")}</span>
                   </button>
                 )
-              : group.sessions.map((session) => row(session, false, false)),
+              : group.sessions.map((session) => row(session, false)),
             actions,
           );
         })}
@@ -356,22 +398,11 @@ export function Sidebar({
             }}
           />
         ) : null}
-
-        {folder(
-          "archived",
-          t("archived"),
-          "archive",
-          sections.archived,
-          () => toggleSection("archived"),
-          archived.length === 0
-            ? <div className="side-empty">{t("noArchived")}</div>
-            : archived.map((session) => row(session, false, true)),
-        )}
       </div>
 
       <div className="side-foot">
         <button type="button" className="side-row" onClick={onSettings}>
-          <mao-icon name="sliders-vertical" />
+          <mao-icon name="settings" size={16} />
           {t("settings")}
         </button>
       </div>

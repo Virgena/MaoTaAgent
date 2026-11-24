@@ -30,12 +30,12 @@ export function ToolRow({ tool, args, ok, output }: { tool: string; args?: unkno
     <div className={`tool${ok === false ? " is-bad" : ""}`}>
       {args === undefined ? null : (
         <div className="tool-line">
-          <span className="tool-arrow">→</span> {tool} <code>{preview(args)}</code>
+          <mao-icon name="arrow-right" size={14} /> {tool} <code>{preview(args)}</code>
         </div>
       )}
       {ok === undefined ? null : (
         <div className="tool-line">
-          <span className="tool-arrow">↳</span> <code>{preview(output)}</code>
+          <mao-icon name="arrow-right" size={14} /> <code>{preview(output)}</code>
         </div>
       )}
     </div>
@@ -56,7 +56,6 @@ export function MessageItem({
       <div className="msg-note">
         <details className="note msg-compact">
           <summary className="note-summary">
-            <mao-icon name="plug" className="icon icon-sm" />
             {t("compactCheckpoint", { n: message.source.folded ?? 0 })}
           </summary>
           <pre className="note-body">{String(message.content ?? "")}</pre>

@@ -55,17 +55,8 @@ export function ContextMeter({
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
       >
-        <svg viewBox="0 0 36 36" aria-hidden="true">
-          <circle className="context-ring-track" cx="18" cy="18" r="15" />
-          <circle
-            className="context-ring-value"
-            cx="18"
-            cy="18"
-            r="15"
-            pathLength="100"
-            strokeDasharray={`${value} 100`}
-          />
-        </svg>
+        <mao-icon name="gauge" size={16} />
+        <span className="context-meter-value">{value}%</span>
       </button>
       {open ? (
         <div className="context-panel">

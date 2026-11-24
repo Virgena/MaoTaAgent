@@ -20,6 +20,7 @@
     "@maota/plugin-kit": "workspace:*",
     "dompurify": "^3",
     "marked": "^16",
+    "maotaui": "0.3.0",
     "react": "^19",
     "react-dom": "^19"
   },
@@ -31,8 +32,7 @@
     "@vitejs/plugin-react": "^5",
     "@virgena/blmoadll": "^0.1.0",
     "typescript": "^7.0.2",
-    "vite": "^7",
-    "maotaui": "link:../../../MaoTaUI"
+    "vite": "^7"
   },
   "types": "lib/index.d.ts",
   "license": "MIT",

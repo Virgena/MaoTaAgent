@@ -2,57 +2,30 @@ import { useRef, useState } from "react";
 
 import { useT } from "../lib/i18n.ts";
 import { maoValue, useMaoEvents } from "../lib/maoEvents.ts";
-import type { AppInfo, ContextView, ModelRoute } from "../lib/rpc.ts";
+import type { AppInfo, ContextView } from "../lib/rpc.ts";
 import { ContextMeter } from "./ContextMeter.tsx";
 import { GitControls } from "./GitControls.tsx";
-import { PERMISSION_OPTIONS, PermissionPicker } from "./PermissionPicker.tsx";
-import { Popover } from "./Popover.tsx";
 import { SkillPicker } from "./SkillPicker.tsx";
-import { ThinkingPicker } from "./ThinkingPicker.tsx";
 
 export function Composer({
   info,
   cwd,
-  thinking,
-  modelRoute,
-  permission,
-  permissionDisabled,
   running,
   blocked,
   context,
   inConversation,
-  projects,
-  names,
-  onNew,
-  onPickProject,
-  onOpenModels,
   onOpenWorktree,
-  onThinking,
-  onModelRoute,
-  onPermission,
   onCompact,
   onSend,
   onCancel,
 }: {
   info: AppInfo | null;
   cwd: string;
-  thinking: string;
-  modelRoute: ModelRoute | null;
-  permission: string;
-  permissionDisabled: boolean;
   running: boolean;
   blocked: boolean;
   context: ContextView | null;
   inConversation: boolean;
-  projects: string[];
-  names: Record<string, string>;
-  onNew: (cwd: string) => void;
-  onPickProject: () => void;
-  onOpenModels: () => void;
   onOpenWorktree: (path: string) => Promise<void>;
-  onThinking: (level: string) => void;
-  onModelRoute: (route: ModelRoute | null) => void;
-  onPermission: (mode: string) => void;
   onCompact: () => void;
   onSend: (text: string) => void;
   onCancel: () => void;
@@ -61,18 +34,8 @@ export function Composer({
   const hasModel = (info?.models?.models ?? []).some((model) =>
     model.enabled && (info?.models?.providers.find((item) => item.id === model.provider)?.enabled ?? true));
   const [text, setText] = useState("");
-  const [projectOpen, setProjectOpen] = useState(false);
-  const [projectQuery, setProjectQuery] = useState("");
   const textRef = useRef<HTMLElement>(null);
   useMaoEvents(textRef, { "mt-input": (event) => setText(maoValue(event)) });
-  const permissionOption = PERMISSION_OPTIONS.find((option) => option.value === permission) ?? PERMISSION_OPTIONS[0]!;
-  const project = cwd === ""
-    ? t("chatWorkspace")
-    : cwd.split(/[\\/]+/).filter((part) => part !== "").at(-1) ?? t("defaultProject");
-  const projectNeedle = projectQuery.trim().toLowerCase();
-  const visibleProjects = projects
-    .filter((path) => `${names[path] ?? ""} ${path}`.toLowerCase().includes(projectNeedle))
-    .sort((left, right) => (names[left] ?? left).localeCompare(names[right] ?? right));
 
   const submit = (): void => {
     if (running || blocked || !hasModel || text.trim() === "") return;
@@ -91,85 +54,11 @@ export function Composer({
 
   return (
     <div className="composer">
-      <div className="composer-context">
-        <Popover
-          className="composer-project"
-          title={t("workspaces")}
-          open={projectOpen}
-          onToggle={() => {
-            setProjectOpen((was) => !was);
-            setProjectQuery("");
-          }}
-          onClose={() => setProjectOpen(false)}
-          label={
-            <>
-              <mao-icon name="folder" className="icon icon-sm" />
-              <span>{project}</span>
-              <mao-icon name="chevron-down" className="icon icon-sm" />
-            </>
-          }
-        >
-          <input
-            autoFocus
-            className="palette-input composer-project-search"
-            placeholder={t("searchWorkspaces")}
-            aria-label={t("workspaces")}
-            value={projectQuery}
-            onChange={(event) => setProjectQuery(event.target.value)}
-          />
-          <div className="composer-project-list">
-            <button
-              type="button"
-              className={`option${cwd === "" ? " is-on" : ""}`}
-              onClick={() => {
-                onNew("");
-                setProjectOpen(false);
-              }}
-            >
-              <mao-icon name="message-square" className="icon option-icon" />
-              <span className="option-text">
-                <span className="option-name">{t("chatWorkspace")}</span>
-              </span>
-              {cwd === "" ? <mao-icon name="check" className="icon icon-sm option-check" /> : null}
-            </button>
-            {visibleProjects.map((path) => (
-              <button
-                key={path}
-                type="button"
-                className={`option${cwd === path ? " is-on" : ""}`}
-                onClick={() => {
-                  onNew(path);
-                  setProjectOpen(false);
-                }}
-              >
-                <mao-icon name="folder" className="icon option-icon" />
-                <span className="option-text">
-                  <span className="option-name">{names[path] ?? path.split(/[\\/]+/).filter(Boolean).at(-1) ?? path}</span>
-                  <span className="option-path">{path}</span>
-                </span>
-                {cwd === path ? <mao-icon name="check" className="icon icon-sm option-check" /> : null}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="composer-project-add"
-            onClick={() => {
-              setProjectOpen(false);
-              onPickProject();
-            }}
-          >
-            <mao-icon name="plus" className="icon icon-sm" />
-            {t("addProject")}
-          </button>
-        </Popover>
-      </div>
-
       <div className="composer-card">
         <mao-text-area
           ref={textRef}
           className="composer-text"
-          rows={3}
+          rows={1}
           aria-label={t("inputPlaceholder")}
           placeholder={t(inConversation ? "composerChatPlaceholder" : "composerIdeaPlaceholder")}
           value={text}
@@ -184,30 +73,9 @@ export function Composer({
         <div className="composer-toolbar">
           <div className="composer-tools">
             <SkillPicker cwd={cwd} disabled={blocked || info?.capabilities?.skill === undefined} onPick={reference} />
-            <PermissionPicker
-              value={permission}
-              disabled={blocked || permissionDisabled}
-              note={info?.capabilities?.permission === undefined ? t("permissionOff") : undefined}
-              onChange={onPermission}
-              label={
-                <>
-                  <mao-icon name="cpu" className="icon icon-sm" />
-                  <span>Agent</span>
-                  <mao-icon name="chevron-down" className="icon icon-sm" />
-                </>
-              }
-            />
-            <ThinkingPicker
-              info={info}
-              thinking={thinking}
-              modelRoute={modelRoute}
-              disabled={blocked}
-              onOpenModels={onOpenModels}
-              onThinking={onThinking}
-              onModelRoute={onModelRoute}
-            />
           </div>
           <div className="composer-actions">
+            <GitControls cwd={cwd} enabled={info?.capabilities?.git !== undefined} onOpenWorktree={onOpenWorktree} />
             {context === null ? null : <ContextMeter context={context} running={running} onCompact={onCompact} />}
             {running ? (
               <mao-button className="composer-send" aria-label={t("stop")} onClick={onCancel}>
@@ -226,17 +94,6 @@ export function Composer({
             )}
           </div>
         </div>
-      </div>
-
-      <div className="composer-meta">
-        <span className="composer-mode">
-          <mao-icon name="cpu" className="icon icon-sm" />
-          <span>Agent</span>
-        </span>
-        <span className="composer-status-separator" aria-hidden="true" />
-        <span className="composer-permission"><mao-icon name={permissionOption.icon} className="icon icon-sm" />{t(permissionOption.name)}</span>
-        {!hasModel ? <span className="composer-warning">{t("modelsEmptyTitle")}</span> : null}
-        <GitControls cwd={cwd} enabled={info?.capabilities?.git !== undefined} onOpenWorktree={onOpenWorktree} />
       </div>
     </div>
   );

@@ -103,7 +103,7 @@ export function SubagentCard({ subagent, cwd }: { subagent: LiveSubagent; cwd: s
         <div className="subagent-trace">
           {subagent.tools.map((tool, index) => (
             <div key={index} className={`subagent-line${tool.ok === false ? " is-bad" : ""}`}>
-              <span className="subagent-arrow">{tool.ok === false ? "×" : "→"}</span>
+              <mao-icon name={tool.ok === false ? "circle-x" : "arrow-right"} size={14} />
               <code>{tool.tool}</code>
               {argPreview(tool.args) === "" ? null : <span className="subagent-args">{argPreview(tool.args)}</span>}
             </div>

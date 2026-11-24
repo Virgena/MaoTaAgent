@@ -131,7 +131,7 @@ function WorktreeDialog({
         <div className="worktree-head">
           <div className="worktree-title" id="worktree-title">{t("newWorktreeTitle")}</div>
           <button type="button" className="side-icon" title={t("close")} aria-label={t("close")} onClick={onClose}>
-            <mao-icon name="x" />
+            <mao-icon name="x" size={16} />
           </button>
         </div>
         <div className="worktree-note">{t("newWorktreeNote")}</div>
@@ -250,14 +250,13 @@ export function GitControls({
           open={modeOpen}
           onToggle={() => setModeOpen((was) => !was)}
           onClose={() => setModeOpen(false)}
-          label={<><mao-icon name="git-branch" className="icon icon-sm" /><span>{t("branch")}</span></>}
+          label={<span>{t("branch")}</span>}
         >
           <button
             type="button"
             className="git-mode-row"
             onClick={() => void refreshAndOpenBranches()}
           >
-            <mao-icon name="folder" className="icon" />
             <span className="git-mode-copy">
               <span className="git-mode-title">{t("branch")}</span>
               <span className="git-mode-note">{t("branchDescription")}</span>
@@ -272,7 +271,6 @@ export function GitControls({
               setWorktreeOpen(true);
             }}
           >
-            <mao-icon name="git-fork" className="icon" />
             <span className="git-mode-copy">
               <span className="git-mode-title">{t("newWorktree")}</span>
               <span className="git-mode-note">{t("worktreeDescription")}</span>
@@ -290,15 +288,14 @@ export function GitControls({
             else void refreshAndOpenBranches();
           }}
           onClose={() => setBranchesOpen(false)}
-          label={<><mao-icon name="git-branch" className="icon icon-sm" /><span>{branchName}</span></>}
+          label={<span>{branchName}</span>}
         >
           <div className="git-branch-list">
             {status.branches.map((branch) => (
               <div key={branch} className={`git-branch-row${branch === status.branch ? " is-on" : ""}`}>
                 <button type="button" className="git-branch-pick" disabled={busy} onClick={() => void switchTo(branch)}>
-                  <mao-icon name="git-branch" className="icon icon-sm" />
                   <span>{branch}</span>
-                  {branch === status.branch ? <mao-icon name="check" className="icon icon-sm option-check" /> : null}
+                  {branch === status.branch ? <mao-icon name="check" size={14} className="option-check" /> : null}
                 </button>
                 {branch === status.branch ? (
                   <button
@@ -308,7 +305,7 @@ export function GitControls({
                     aria-label={t("copyBranch")}
                     onClick={() => void copyBranch()}
                   >
-                    <mao-icon name={copied ? "check" : "copy"} className="icon icon-sm" />
+                    <mao-icon name={copied ? "check" : "copy"} size={14} />
                   </button>
                 ) : null}
               </div>

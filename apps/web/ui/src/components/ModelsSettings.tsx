@@ -326,7 +326,7 @@ export function ModelsSettings({
               <div className="model-discovered-list">
                 {discovered.map((model) => (
                   <mao-button key={model.id} size="sm" variant="bordered" color={pickedModel?.id === model.id ? "primary" : "neutral"} onClick={() => setPickedModel(model)}>
-                    {pickedModel?.id === model.id ? <mao-icon name="check" className="icon icon-sm" /> : null}
+                    {pickedModel?.id === model.id ? <mao-icon name="check" size={14} /> : null}
                     {model.name ?? model.id}
                   </mao-button>
                 ))}
@@ -370,7 +370,6 @@ export function ModelsSettings({
 
       <div className="models-toolbar">
         <label className="models-search">
-          <mao-icon name="search" className="icon icon-sm" />
           <input value={query} placeholder={t("searchModels")} aria-label={t("searchModels")} onChange={(event) => setQuery(event.target.value)} />
         </label>
         <div className="models-toolbar-actions">
@@ -382,7 +381,6 @@ export function ModelsSettings({
       {error === null ? null : <div className="model-error">{error}</div>}
       {configurableProviders.length === 0 ? (
         <div className="models-empty">
-          <div className="models-empty-mark"><mao-icon name="cpu" size={20} /></div>
           <div className="models-empty-title">{t("modelsEmptyTitle")}</div>
           <mao-button size="sm" color="primary" onClick={openNewProvider}>{t("addProvider")}</mao-button>
         </div>
@@ -426,7 +424,7 @@ export function ModelsSettings({
                       open={menu === `provider:${provider.id}`}
                       onToggle={() => setMenu(menu === `provider:${provider.id}` ? null : `provider:${provider.id}`)}
                       onClose={() => setMenu(null)}
-                      label={<mao-icon name="ellipsis" className="icon icon-sm" />}
+                      label={<mao-icon name="ellipsis" size={14} />}
                     >
                       <button type="button" className="option" onClick={() => { setMenu(null); setEditor({ kind: "provider", draft: providerDraft(provider) }); }}>{t("editProvider")}</button>
                       <button type="button" className="option" onClick={() => { setMenu(null); void removeProvider(provider); }}>{t("delete")}</button>
@@ -438,7 +436,7 @@ export function ModelsSettings({
                       aria-expanded={open}
                       onClick={() => setExpanded((was) => ({ ...was, [provider.id]: !open }))}
                     >
-                      <mao-icon name={open ? "chevron-down" : "chevron-right"} className="icon icon-sm" />
+                      <mao-icon name={open ? "chevron-down" : "chevron-right"} size={14} />
                     </button>
                   </div>
                 </div>
@@ -475,7 +473,7 @@ export function ModelsSettings({
                             open={menu === `model:${model.provider}/${model.model}`}
                             onToggle={() => setMenu(menu === `model:${model.provider}/${model.model}` ? null : `model:${model.provider}/${model.model}`)}
                             onClose={() => setMenu(null)}
-                            label={<mao-icon name="ellipsis" className="icon icon-sm" />}
+                            label={<mao-icon name="ellipsis" size={14} />}
                           >
                             <button type="button" className="option" onClick={() => { setMenu(null); setEditor({ kind: "model", draft: modelDraft(model.provider, model) }); }}>{t("editModel")}</button>
                             <button type="button" className="option" onClick={() => { setMenu(null); void removeModel(model); }}>{t("delete")}</button>

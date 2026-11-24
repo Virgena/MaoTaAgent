@@ -3,13 +3,14 @@
 /// and the rows the palette searches, then hands everything to the views.
 
 import { useT } from "../lib/i18n.ts";
-import type { AppInfo, Approval, ContextView, ModelRoute, SessionMessage, SessionSummary } from "../lib/rpc.ts";
+import type { AppInfo, Approval, ContextView, SessionMessage, SessionSummary } from "../lib/rpc.ts";
 import type { HostStatus } from "../lib/rpc.ts";
 import { ChatView } from "./ChatView.tsx";
 import { HostStatusStrip } from "./HostStatusStrip.tsx";
 import type { LiveTurn } from "./MessageList.tsx";
 import { PluginsView } from "./PluginsView.tsx";
 import { SearchPalette } from "./SearchPalette.tsx";
+import { TaskBrowser } from "./TaskBrowser.tsx";
 import { TasksView } from "./TasksView.tsx";
 
 export function MainPane({
@@ -18,8 +19,8 @@ export function MainPane({
   kernelError,
   hostStatus,
   project,
-  projects,
   sessions,
+  pinned,
   archived,
   names,
   active,
@@ -27,9 +28,6 @@ export function MainPane({
   messages,
   pending,
   failure,
-  thinking,
-  modelRoute,
-  permission,
   approvals,
   context,
   onCompact,
@@ -39,23 +37,23 @@ export function MainPane({
   onNew,
   onPickProject,
   onOpen,
+  onPin,
+  onArchive,
+  onPinMany,
+  onArchiveMany,
   onRetry,
-  onOpenModels,
   onOpenWorktree,
-  onThinking,
-  onModelRoute,
-  onPermission,
   onAnswer,
   onSend,
   onCancel,
 }: {
-  page: "chat" | "plugins" | "tasks";
+  page: "chat" | "plugins" | "tasks" | "scheduled";
   info: AppInfo | null;
   kernelError: string | null;
   hostStatus: HostStatus | null;
   project: string;
-  projects: string[];
   sessions: SessionSummary[];
+  pinned: string[];
   archived: string[];
   names: Record<string, string>;
   active: { id: string; cwd: string } | null;
@@ -63,9 +61,6 @@ export function MainPane({
   messages: SessionMessage[];
   pending: string | null;
   failure: { session: string; text: string } | null;
-  thinking: string;
-  modelRoute: ModelRoute | null;
-  permission: string;
   approvals: Approval[];
   context: ContextView | null;
   onCompact: () => void;
@@ -75,12 +70,12 @@ export function MainPane({
   onNew: (cwd: string) => void;
   onPickProject: () => void;
   onOpen: (session: SessionSummary) => void;
+  onPin: (id: string) => void;
+  onArchive: (id: string) => void;
+  onPinMany: (ids: string[], pinned: boolean) => void;
+  onArchiveMany: (ids: string[], archived: boolean) => void;
   onRetry: () => void;
-  onOpenModels: () => void;
   onOpenWorktree: (path: string) => Promise<void>;
-  onThinking: (value: string) => void;
-  onModelRoute: (route: ModelRoute | null) => void;
-  onPermission: (mode: string) => void;
   onAnswer: (id: string, decision: "allow" | "deny") => void;
   onSend: (text: string) => void;
   onCancel: () => void;
@@ -93,6 +88,21 @@ export function MainPane({
     <>
       <HostStatusStrip status={hostStatus} />
       {page === "tasks" ? (
+        <TaskBrowser
+          sessions={sessions}
+          names={names}
+          running={Object.keys(lives)}
+          pinned={pinned}
+          archived={archived}
+          activeId={active?.id ?? null}
+          onOpen={onOpen}
+          onNew={() => onNew(project)}
+          onPin={onPin}
+          onArchive={onArchive}
+          onPinMany={onPinMany}
+          onArchiveMany={onArchiveMany}
+        />
+      ) : page === "scheduled" ? (
         <TasksView session={active} />
       ) : page === "plugins" ? (
         <PluginsView info={info} />
@@ -107,23 +117,12 @@ export function MainPane({
           live={active === null ? null : (lives[active.id] ?? null)}
           failure={failure !== null && active !== null && failure.session === active.id ? failure.text : null}
           hasKey={info?.has_key ?? null}
-          projects={projects}
-          names={names}
-          thinking={thinking}
-          modelRoute={modelRoute}
-          permission={permission}
           approvals={approvals}
           context={context}
           onCompact={onCompact}
           spawned={spawned}
           onRetry={onRetry}
-          onNew={onNew}
-          onPickProject={onPickProject}
-          onOpenModels={onOpenModels}
           onOpenWorktree={onOpenWorktree}
-          onThinking={onThinking}
-          onModelRoute={onModelRoute}
-          onPermission={onPermission}
           onAnswer={onAnswer}
           onSend={onSend}
           onCancel={onCancel}

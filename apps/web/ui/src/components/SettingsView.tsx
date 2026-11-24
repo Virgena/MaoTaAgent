@@ -278,7 +278,7 @@ export function SettingsView({
             aria-label={t("close")}
             onClick={onClose}
           >
-            <mao-icon name="x" />
+            <mao-icon name="x" size={16} />
           </button>
         </header>
 
@@ -304,7 +304,7 @@ export function SettingsView({
                 aria-label={t("clear")}
                 onClick={() => setQuery("")}
               >
-                <mao-icon name="x" className="icon icon-sm" />
+                <mao-icon name="x" size={14} />
               </button>
             )}
           </div>
@@ -349,7 +349,8 @@ export function SettingsView({
                         >
                           <mao-icon
                             name={isOpen ? "chevron-down" : "chevron-right"}
-                            className="icon icon-sm settings-chevron"
+                            size={14}
+                            className="settings-chevron"
                           />
                           <span>{item.label}</span>
                         </button>

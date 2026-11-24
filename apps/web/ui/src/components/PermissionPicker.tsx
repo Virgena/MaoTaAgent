@@ -1,19 +1,17 @@
 import { useState, type ReactNode } from "react";
-import type { IconName } from "maotaui";
 
 import { useT, type MessageKey } from "../lib/i18n.ts";
 import { Popover } from "./Popover.tsx";
 
 export const PERMISSION_OPTIONS: readonly {
   value: string;
-  icon: IconName;
   name: MessageKey;
   note: MessageKey;
   tone: string;
 }[] = [
-  { value: "ask", icon: "hand", name: "askApproval", note: "askNote", tone: "" },
-  { value: "auto", icon: "shield-check", name: "autoApprove", note: "autoNote", tone: "" },
-  { value: "full", icon: "triangle-alert", name: "fullAccess", note: "fullNote", tone: " is-danger" },
+  { value: "ask", name: "askApproval", note: "askNote", tone: "" },
+  { value: "auto", name: "autoApprove", note: "autoNote", tone: "" },
+  { value: "full", name: "fullAccess", note: "fullNote", tone: " is-danger" },
 ];
 
 export function PermissionPicker({
@@ -43,24 +41,17 @@ export function PermissionPicker({
       onClose={() => setOpen(false)}
       label={label ?? (
         <>
-          <mao-icon name={current.icon} className="icon icon-sm" />
           {t(current.name)}
-          <mao-icon name="chevron-down" className="icon icon-sm" />
+          <mao-icon name="chevron-down" size={14} />
         </>
       )}
     >
       <div className="permission-group-head">
-        <span className="permission-group-title">
-          <mao-icon name="chevron-down" className="icon icon-sm" />
-          {t("agentMode")}
-        </span>
+        <span className="permission-group-title">{t("agentMode")}</span>
         <span>{t(current.name)}</span>
       </div>
       <div className="permission-group-head is-permissions">
-        <span className="permission-group-title">
-          <mao-icon name="chevron-down" className="icon icon-sm" />
-          {t("permissions")}
-        </span>
+        <span className="permission-group-title">{t("permissions")}</span>
         <span>{t(current.name)}</span>
       </div>
       {note === undefined ? null : <div className="popover-note">{note}</div>}
@@ -75,12 +66,11 @@ export function PermissionPicker({
             setOpen(false);
           }}
         >
-          <mao-icon name={option.icon} className="icon option-icon" />
           <span className="option-text">
             <span className="option-name">{t(option.name)}</span>
             <span className="option-note">{t(option.note)}</span>
           </span>
-          {option.value === value ? <mao-icon name="check" className="icon icon-sm option-check" /> : null}
+          {option.value === value ? <mao-icon name="check" size={14} className="option-check" /> : null}
         </button>
       ))}
     </Popover>

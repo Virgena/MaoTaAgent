@@ -1,4 +1,5 @@
 import type { CSSProperties, DOMAttributes, ReactNode, RefAttributes } from "react";
+import type { IconName } from "maotaui/icons";
 
 type Bool = boolean | undefined;
 type Color = "primary" | "secondary" | "success" | "warning" | "danger" | "info" | "neutral";
@@ -122,7 +123,7 @@ interface MaoCheckboxAttrs extends MaoBase {
 }
 
 interface MaoIconAttrs extends MaoBase {
-  name?: string;
+  name?: IconName;
   size?: number | string;
   label?: string;
   "stroke-width"?: number | string;

@@ -13,7 +13,7 @@ export function ApprovalCard({
   return (
     <div className="approval">
       <div className="approval-head">
-        <mao-icon name="triangle-alert" className="icon icon-sm" />
+        <mao-icon name="triangle-alert" size={14} />
         <span className="approval-title">{t("approvalTitle")}</span>
       </div>
       <div className="approval-tool">{t("approvalTool", { tool: approval.tool })}</div>

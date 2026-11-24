@@ -4,15 +4,13 @@ const STORAGE_KEY = "maota.sidebar.sections";
 
 interface SidebarSections {
   pinned: boolean;
-  chats: boolean;
-  archived: boolean;
+  recent: boolean;
   projects: string[];
 }
 
 const DEFAULT_SECTIONS: SidebarSections = {
   pinned: true,
-  chats: true,
-  archived: true,
+  recent: true,
   projects: [],
 };
 
@@ -22,8 +20,7 @@ function storedSections(): SidebarSections {
     if (raw === null) return DEFAULT_SECTIONS;
     return {
       pinned: raw.pinned !== false,
-      chats: raw.chats !== false,
-      archived: raw.archived !== false,
+      recent: raw.recent !== false,
       projects: Array.isArray(raw.projects)
         ? raw.projects.filter((item): item is string => typeof item === "string")
         : [],
@@ -43,7 +40,7 @@ export function useSidebarSections() {
     }
   }, [sections]);
 
-  const toggleSection = useCallback((key: "pinned" | "chats" | "archived"): void => {
+  const toggleSection = useCallback((key: "pinned" | "recent"): void => {
     setSections((current) => ({ ...current, [key]: !current[key] }));
   }, []);
 

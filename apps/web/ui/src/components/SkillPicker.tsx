@@ -54,7 +54,7 @@ export function SkillPicker({
         setQuery("");
       }}
       onClose={() => setOpen(false)}
-      label={<mao-icon name="plus" className="icon icon-sm" />}
+      label={<mao-icon name="plus" size={14} />}
     >
       <div className="popover-head">
         <span>{t("skillInsert")}</span>

@@ -22,6 +22,7 @@ import {
   type SessionFile,
   type SessionMessage,
   type SessionSummary,
+  type WorkspaceView,
 } from "./lib/rpc.ts";
 
 export function App() {
@@ -39,14 +40,13 @@ export function App() {
   const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [pending, setPending] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ session: string; text: string } | null>(null);
-  const [page, setPage] = useState<"chat" | "plugins" | "tasks">("chat");
+  const [page, setPage] = useState<"chat" | "plugins" | "tasks" | "scheduled">("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | null>(null);
   const [palette, setPalette] = useState(false);
   const [manualPath, setManualPath] = useState(false);
   const [thinking, setThinking] = useState<string>("off");
   const [modelRoute, setModelRoute] = useState<ModelRoute | null>(null);
-  const [permission, setPermission] = useState<string>("ask");
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [lives, setLives] = useState<Record<string, LiveTurn>>({});
   const [spawned, setSpawned] = useState<Record<string, SessionSummary[]>>({});
@@ -176,15 +176,6 @@ export function App() {
       setKernelError(describe(error));
     }
   }, []);
-  /// The approval mode lives with the session in the permission plugin, so the
-  /// page asks for it instead of keeping a copy of its own.
-  const loadPermission = useCallback(async (sessionId: string, cwd: string): Promise<void> => {
-    try {
-      const reply = await call<{ mode?: string }>("permission.get", { session_id: sessionId, cwd });
-      if (typeof reply.mode === "string") setPermission(reply.mode);
-    } catch {
-    }
-  }, []);
   const rebuildApprovals = useCallback(async (sessionId: string): Promise<void> => {
     try {
       const reply = await call<{ requests?: Approval[] }>("permission.pending", { session_id: sessionId });
@@ -214,11 +205,6 @@ export function App() {
       void openSession(current.id, current.cwd);
     });
   }, [openSession]);
-  const changeModelRoute = useCallback((next: ModelRoute | null): void => {
-    setModelRoute(next);
-    const fallback = reasoningFallback(info, next, thinking);
-    if (fallback !== null) changeThinking(fallback);
-  }, [changeThinking, info, thinking]);
   const handleEvent = useHostEvents({
     activeRef,
     turns,
@@ -272,9 +258,8 @@ export function App() {
     }
     void openSessionRef.current(active.id, active.cwd);
     void loadSpawned(active.id, active.cwd);
-    void loadPermission(active.id, active.cwd);
     void rebuildApprovals(active.id);
-  }, [active, clearSessionView, loadPermission, loadSpawned, rebuildApprovals]);
+  }, [active, clearSessionView, loadSpawned, rebuildApprovals]);
   const send = useCallback(
     async (text: string, at: { id: string; cwd: string }): Promise<void> => {
       if (text.trim() === "") return;
@@ -337,26 +322,6 @@ export function App() {
     [rebuildApprovals],
   );
 
-  const changePermission = useCallback(
-    async (mode: string): Promise<void> => {
-      const current = activeRef.current;
-      if (current === null) return;
-      try {
-        const reply = await call<{ mode?: string }>("permission.set", {
-          session_id: current.id,
-          cwd: current.cwd,
-          mode,
-        });
-        if (typeof reply.mode === "string") setPermission(reply.mode);
-        return;
-      } catch (error) {
-        setFailure({ session: current.id, text: describe(error) });
-      }
-      void loadPermission(current.id, current.cwd);
-    },
-    [loadPermission],
-  );
-
   const newChat = (cwd: string): void => {
     loadSeq.current += 1;
     setFailure(null);
@@ -409,6 +374,31 @@ export function App() {
   const flipArchive = (id: string): void => {
     void updateWorkspace("workspace.set_archive", { session_id: id, archived: !archived.includes(id) });
   };
+  const updateTaskFlags = useCallback(
+    async (
+      method: "workspace.set_pin" | "workspace.set_archive",
+      ids: string[],
+      key: "pinned" | "archived",
+      value: boolean,
+    ): Promise<void> => {
+      let revision = workspace.revision;
+      for (const id of ids) {
+        try {
+          const next = await call<WorkspaceView>(method, {
+            session_id: id,
+            [key]: value,
+            expected_revision: revision,
+          });
+          revision = next.revision;
+          adoptWorkspace(next);
+        } catch (error) {
+          setKernelError(describe(error));
+          return;
+        }
+      }
+    },
+    [adoptWorkspace, workspace.revision],
+  );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -426,7 +416,7 @@ export function App() {
     <div className="app" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
       <SidebarPane
         sessions={allSessions}
-        activeId={active?.id ?? null}
+        activeId={page === "chat" ? active?.id ?? null : null}
         projects={projects}
         names={names}
         pinned={pinned}
@@ -449,6 +439,7 @@ export function App() {
           setSettingsOpen(true);
         }}
         onPlugins={() => setPage("plugins")}
+        onScheduled={() => setPage("scheduled")}
         onTasks={() => setPage("tasks")}
         onSearch={() => setPalette(true)}
       />
@@ -464,8 +455,8 @@ export function App() {
         kernelError={kernelError}
         hostStatus={hostStatus}
         project={project}
-        projects={projects}
         sessions={allSessions}
+        pinned={pinned}
         archived={archived}
         names={names}
         active={active}
@@ -473,9 +464,6 @@ export function App() {
         messages={messages}
         pending={pending}
         failure={failure}
-        thinking={thinking}
-        modelRoute={modelRoute}
-        permission={permission}
         approvals={approvals}
         context={context}
         onCompact={() => void compactNow()}
@@ -485,15 +473,12 @@ export function App() {
         onNew={newChat}
         onPickProject={pickProject}
         onOpen={open}
+        onPin={flipPin}
+        onArchive={flipArchive}
+        onPinMany={(ids, value) => void updateTaskFlags("workspace.set_pin", ids, "pinned", value)}
+        onArchiveMany={(ids, value) => void updateTaskFlags("workspace.set_archive", ids, "archived", value)}
         onRetry={() => void loadInfo()}
-        onOpenModels={() => {
-          setSettingsSection("models");
-          setSettingsOpen(true);
-        }}
         onOpenWorktree={openWorktree}
-        onThinking={changeThinking}
-        onModelRoute={changeModelRoute}
-        onPermission={(mode) => void changePermission(mode)}
         onAnswer={(id, decision) => void answer(id, decision)}
         onSend={submit}
         onCancel={() => void cancel()}

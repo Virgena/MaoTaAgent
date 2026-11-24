@@ -24,8 +24,8 @@ export function SearchPalette({
   const needle = query.trim().toLowerCase();
   const hits = sessions.filter((session) => `${session.title} ${session.cwd}`.toLowerCase().includes(needle));
   const actions = [
-    { key: "new", label: t("newChat"), icon: "message-square", run: onNew },
-    { key: "folder", label: t("openFolder"), icon: "folder", run: onAddProject },
+    { key: "new", label: t("newChat"), run: onNew },
+    { key: "folder", label: t("openFolder"), run: onAddProject },
   ].filter((action) => action.label.toLowerCase().includes(needle));
 
   return (
@@ -62,7 +62,6 @@ export function SearchPalette({
               <div className="palette-group" role="heading" aria-level={2}>{t("quick")}</div>
               {actions.map((action) => (
                 <button key={action.key} type="button" className="palette-item" onClick={action.run}>
-                  <mao-icon name={action.icon} className="icon icon-sm" />
                   <span className="palette-name">{action.label}</span>
                 </button>
               ))}

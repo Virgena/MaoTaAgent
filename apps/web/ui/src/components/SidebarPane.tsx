@@ -1,6 +1,5 @@
-/// The sidebar pane: the flat project folders and conversations beside the
-/// chat. It keeps pinned and archived rows in their own folders and hands the
-/// sorted result to Sidebar.
+/// The sidebar pane: the flat project folders and recent task list beside the
+/// chat. It keeps pinned rows separate and hands the sorted result to Sidebar.
 
 import { useMemo } from "react";
 
@@ -28,6 +27,7 @@ export function SidebarPane({
   onArchive,
   onSettings,
   onPlugins,
+  onScheduled,
   onTasks,
   onSearch,
 }: {
@@ -51,6 +51,7 @@ export function SidebarPane({
   onArchive: (id: string) => void;
   onSettings: () => void;
   onPlugins: () => void;
+  onScheduled: () => void;
   onTasks: () => void;
   onSearch: () => void;
 }) {
@@ -78,19 +79,6 @@ export function SidebarPane({
       });
   }, [archived, names, pinned, project, projects, sessions]);
 
-  const chats = useMemo(
-    () =>
-      sessions
-        .filter((session) => (session.cwd === "" ? DEFAULT_PROJECT : session.cwd) === DEFAULT_PROJECT)
-        .filter((session) => !archived.includes(session.id))
-        .filter((session) => !pinned.includes(session.id))
-        .sort(
-          (left, right) =>
-            right.updated_at.localeCompare(left.updated_at),
-        ),
-    [archived, pinned, sessions],
-  );
-
   const pinnedRows = useMemo(
     () =>
       sessions
@@ -99,20 +87,12 @@ export function SidebarPane({
     [archived, pinned, sessions],
   );
 
-  const archivedRows = useMemo(
-    () =>
-      sessions
-        .filter((session) => archived.includes(session.id))
-        .sort((left, right) => right.updated_at.localeCompare(left.updated_at)),
-    [archived, sessions],
-  );
-
   return (
     <Sidebar
       groups={groups}
-      chats={chats}
+      recent={sessions}
       pinned={pinnedRows}
-      archived={archivedRows}
+      archived={archived}
       names={names}
       activeId={activeId}
       running={running}
@@ -128,6 +108,7 @@ export function SidebarPane({
       onArchive={onArchive}
       onSettings={onSettings}
       onPlugins={onPlugins}
+      onScheduled={onScheduled}
       onTasks={onTasks}
       onSearch={onSearch}
     />

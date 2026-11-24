@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "maotaui/styles.css";
 import "maotaui";
 
 import { App } from "./App.tsx";
