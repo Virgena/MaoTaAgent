@@ -37,7 +37,7 @@ insert = [
 
 | id | Package | Capability |
 |---|---|---|
-| `model-openai` | `@maota/model-openai` | `model.adapter.openai` |
+| `model-openai` | `@maota/model-openai` | `model.adapter.openai`, `model.adapter.responses` |
 | `model-anthropic` | `@maota/model-anthropic` | `model.adapter.anthropic` |
 | `model-router` | `@maota/model-router` | `model` |
 | `settings` | `@maota/settings` | `settings` |

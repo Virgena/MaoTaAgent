@@ -78,12 +78,16 @@ function tokenText(value: number | undefined): string {
 
 export function ModelsSettings({
   catalog,
+  view,
   onChanged,
   onEditingChange,
+  onOpenProviders,
 }: {
   catalog: ModelCatalogView | null;
+  view: "providers" | "models";
   onChanged: (catalog: ModelCatalogView) => void;
   onEditingChange?: (editing: boolean) => void;
+  onOpenProviders: () => void;
 }) {
   const t = useT();
   const editorDialog = useRef<HTMLDivElement | null>(null);
@@ -93,10 +97,18 @@ export function ModelsSettings({
   const [error, setError] = useState<string | null>(null);
   const [discovered, setDiscovered] = useState<{ id: string; name?: string }[]>([]);
   const [pickedModel, setPickedModel] = useState<{ id: string; name?: string } | null>(null);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [menu, setMenu] = useState<string | null>(null);
-  const adapters = catalog?.adapters ?? [];
+  const adapterLabels: Record<string, string> = {
+    openai: t("adapterChatCompletions"),
+    responses: t("adapterResponses"),
+    anthropic: t("adapterMessages"),
+  };
+  const adapterOrder = ["openai", "responses", "anthropic"];
+  const adapters = (catalog?.adapters ?? [])
+    .filter((adapter) => adapter.id in adapterLabels)
+    .sort((left, right) => adapterOrder.indexOf(left.id) - adapterOrder.indexOf(right.id));
   const configurableProviders = catalog?.providers ?? [];
+  const providersView = view === "providers";
   const editorOpen = editor !== null;
 
   const patchProvider = (field: keyof ProviderDraft, value: string): void =>
@@ -294,12 +306,17 @@ export function ModelsSettings({
   };
 
   const needle = query.trim().toLowerCase();
+  const providersById = new Map(configurableProviders.map((provider) => [provider.id, provider]));
   const modelsFor = (provider: ModelProviderView): ModelView[] =>
     (catalog?.models ?? []).filter((model) => model.provider === provider.id);
   const visibleProviders = configurableProviders.filter((provider) => {
     if (needle === "") return true;
-    const models = modelsFor(provider);
-    return `${provider.name} ${provider.adapter} ${provider.base_url} ${models.map((model) => `${model.name} ${model.model}`).join(" ")}`.toLowerCase().includes(needle);
+    return `${provider.name} ${adapterLabels[provider.adapter] ?? provider.adapter} ${provider.base_url}`.toLowerCase().includes(needle);
+  });
+  const visibleModels = (catalog?.models ?? []).filter((model) => {
+    if (needle === "") return true;
+    const provider = providersById.get(model.provider);
+    return `${provider?.name ?? model.provider} ${model.name} ${model.model}`.toLowerCase().includes(needle);
   });
   return (
     <div className={`models-settings${editor === null ? "" : " is-editing"}`}>
@@ -310,7 +327,7 @@ export function ModelsSettings({
               <form className="model-editor" onSubmit={(event) => { event.preventDefault(); void saveProvider(); }}>
                 <div className="model-editor-title" id="model-editor-title">{editor.draft.id === "" ? t("addProvider") : t("editProvider")}</div>
           <div className="model-form-grid">
-            <mao-select ref={adapterRef} label={t("adapter")} value={editor.draft.adapter} options={JSON.stringify(adapters.map((adapter) => ({ value: adapter.id, label: adapter.name })))} />
+            <mao-select ref={adapterRef} label={t("adapter")} value={editor.draft.adapter} options={JSON.stringify(adapters.map((adapter) => ({ value: adapter.id, label: adapterLabels[adapter.id] ?? adapter.name })))} />
             <mao-text-field ref={providerNameRef} label={t("providerName")} value={editor.draft.name} />
             <mao-text-field ref={baseUrlRef} label={t("baseUrl")} value={editor.draft.base_url} />
             <mao-select ref={authKindRef} label={t("keySource")} value={editor.draft.auth_kind} options={JSON.stringify([{ value: "file", label: t("keySourceFile") }, { value: "env", label: t("keySourceEnv") }])} />
@@ -370,28 +387,34 @@ export function ModelsSettings({
 
       <div className="models-toolbar">
         <label className="models-search">
-          <input value={query} placeholder={t("searchModels")} aria-label={t("searchModels")} onChange={(event) => setQuery(event.target.value)} />
+          <input
+            value={query}
+            placeholder={providersView ? t("searchProviders") : t("searchModels")}
+            aria-label={providersView ? t("searchProviders") : t("searchModels")}
+            onChange={(event) => setQuery(event.target.value)}
+          />
         </label>
         <div className="models-toolbar-actions">
-          <mao-button size="sm" variant="bordered" onClick={openNewProvider}>{t("addProvider")}</mao-button>
-          <mao-button size="sm" variant="bordered" disabled={configurableProviders.length === 0} onClick={() => openNewModel()}>{t("addModel")}</mao-button>
+          {providersView ? (
+            <mao-button size="sm" variant="bordered" onClick={openNewProvider}>{t("addProvider")}</mao-button>
+          ) : (
+            <mao-button size="sm" variant="bordered" disabled={configurableProviders.length === 0} onClick={() => openNewModel()}>{t("addModel")}</mao-button>
+          )}
         </div>
       </div>
 
       {error === null ? null : <div className="model-error">{error}</div>}
-      {configurableProviders.length === 0 ? (
+      {providersView && configurableProviders.length === 0 ? (
         <div className="models-empty">
-          <div className="models-empty-title">{t("modelsEmptyTitle")}</div>
+          <div className="models-empty-title">{t("providersEmptyTitle")}</div>
           <mao-button size="sm" color="primary" onClick={openNewProvider}>{t("addProvider")}</mao-button>
         </div>
-      ) : visibleProviders.length === 0 ? (
-        <div className="models-no-results">{t("noModels")}</div>
-      ) : (
+      ) : providersView && visibleProviders.length === 0 ? (
+        <div className="models-no-results">{t("noProviders")}</div>
+      ) : providersView ? (
         <div className="models-provider-list">
           {visibleProviders.map((provider) => {
-            const open = expanded[provider.id] ?? false;
             const allModels = modelsFor(provider);
-            const models = allModels.filter((model) => needle === "" || `${provider.name} ${model.name} ${model.model}`.toLowerCase().includes(needle));
             const healthy = provider.key_configured && provider.verified;
             return (
               <div key={provider.id} className="models-provider-group">
@@ -406,16 +429,12 @@ export function ModelsSettings({
                   >
                     <span />
                   </button>
-                  <button
-                    type="button"
-                    className="models-provider-main"
-                    aria-expanded={open}
-                    onClick={() => setExpanded((was) => ({ ...was, [provider.id]: !open }))}
-                  >
+                  <div className="models-provider-main is-static">
                     <span className="models-provider-name">{provider.name}</span>
+                    <span className="models-provider-meta">{adapterLabels[provider.adapter] ?? provider.adapter}</span>
                     <span className="models-count">{allModels.length}</span>
                     <span className={"models-health " + (healthy ? "is-ok" : "is-warn")} aria-label={healthy ? t("healthy") : provider.verified ? t("verified") : t("configured")}><span className="models-health-dot" /></span>
-                  </button>
+                  </div>
                   <div className="models-provider-actions">
                     <Popover
                       className="models-menu"
@@ -429,66 +448,61 @@ export function ModelsSettings({
                       <button type="button" className="option" onClick={() => { setMenu(null); setEditor({ kind: "provider", draft: providerDraft(provider) }); }}>{t("editProvider")}</button>
                       <button type="button" className="option" onClick={() => { setMenu(null); void removeProvider(provider); }}>{t("delete")}</button>
                     </Popover>
-                    <button
-                      type="button"
-                      className="models-expand"
-                      aria-label={open ? t("collapse") : t("expand")}
-                      aria-expanded={open}
-                      onClick={() => setExpanded((was) => ({ ...was, [provider.id]: !open }))}
-                    >
-                      <mao-icon name={open ? "chevron-down" : "chevron-right"} size={14} />
-                    </button>
                   </div>
                 </div>
-                {open ? <div className="models-model-list">
-                  {models.map((model) => {
-                    return (
-                      <div key={`${model.provider}/${model.model}`} className="models-row">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={model.enabled}
-                          aria-label={model.name}
-                          className={`models-switch${model.enabled ? " is-on" : ""}`}
-                          onClick={() => void toggleModel(model)}
-                        >
-                          <span />
-                        </button>
-                        <div className="models-row-main">
-                          <div className="models-row-title">
-                            <span className="models-name">{model.name}</span>
-                          </div>
-                          <div className="models-row-facts">
-                            <span>{model.model}</span>
-                            <span>{tokenText(model.context_tokens)}</span>
-                            {model.capabilities.tools ? <span>{t("tools")}</span> : null}
-                            {model.capabilities.vision ? <span>{t("vision")}</span> : null}
-                          </div>
-                        </div>
-                        <div className="models-row-actions">
-                          <Popover
-                            className="models-menu"
-                            align="end"
-                            title={t("more")}
-                            open={menu === `model:${model.provider}/${model.model}`}
-                            onToggle={() => setMenu(menu === `model:${model.provider}/${model.model}` ? null : `model:${model.provider}/${model.model}`)}
-                            onClose={() => setMenu(null)}
-                            label={<mao-icon name="ellipsis" size={14} />}
-                          >
-                            <button type="button" className="option" onClick={() => { setMenu(null); setEditor({ kind: "model", draft: modelDraft(model.provider, model) }); }}>{t("editModel")}</button>
-                            <button type="button" className="option" onClick={() => { setMenu(null); void removeModel(model); }}>{t("delete")}</button>
-                          </Popover>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {models.length === 0 ? (
-                    <div className="models-provider-empty">
-                      <span>{t("modelsProviderEmpty")}</span>
-                      <mao-button size="sm" variant="bordered" onClick={() => openNewModel(provider.id)}>{t("addModel")}</mao-button>
-                    </div>
-                  ) : null}
-                </div> : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : (catalog?.models.length ?? 0) === 0 ? (
+        <div className="models-empty">
+          <div className="models-empty-title">{t("modelsEmptyGoProviders")}</div>
+          <mao-button size="sm" color="primary" onClick={onOpenProviders}>{t("goToProviders")}</mao-button>
+        </div>
+      ) : visibleModels.length === 0 ? (
+        <div className="models-no-results">{t("noModels")}</div>
+      ) : (
+        <div className="models-provider-list">
+          {visibleModels.map((model) => {
+            const provider = providersById.get(model.provider);
+            return (
+              <div key={`${model.provider}/${model.model}`} className="models-row">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={model.enabled}
+                  aria-label={model.name}
+                  className={`models-switch${model.enabled ? " is-on" : ""}`}
+                  onClick={() => void toggleModel(model)}
+                >
+                  <span />
+                </button>
+                <div className="models-row-main">
+                  <div className="models-row-title">
+                    <span className="models-name">{model.name}</span>
+                  </div>
+                  <div className="models-row-facts">
+                    <span>{provider?.name ?? model.provider}</span>
+                    <span>{model.model}</span>
+                    <span>{tokenText(model.context_tokens)}</span>
+                    {model.capabilities.tools ? <span>{t("tools")}</span> : null}
+                    {model.capabilities.vision ? <span>{t("vision")}</span> : null}
+                  </div>
+                </div>
+                <div className="models-row-actions">
+                  <Popover
+                    className="models-menu"
+                    align="end"
+                    title={t("more")}
+                    open={menu === `model:${model.provider}/${model.model}`}
+                    onToggle={() => setMenu(menu === `model:${model.provider}/${model.model}` ? null : `model:${model.provider}/${model.model}`)}
+                    onClose={() => setMenu(null)}
+                    label={<mao-icon name="ellipsis" size={14} />}
+                  >
+                    <button type="button" className="option" onClick={() => { setMenu(null); setEditor({ kind: "model", draft: modelDraft(model.provider, model) }); }}>{t("editModel")}</button>
+                    <button type="button" className="option" onClick={() => { setMenu(null); void removeModel(model); }}>{t("delete")}</button>
+                  </Popover>
+                </div>
               </div>
             );
           })}

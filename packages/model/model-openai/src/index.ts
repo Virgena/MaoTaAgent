@@ -2,6 +2,7 @@
 import { CallError, isPluginEntry, runPlugin, type Call, type Definition } from "@maota/plugin-kit";
 import { MODEL_FAILURE, type AdapterChatRequest, type DiscoveredModel } from "@maota/model-protocol";
 import { asOpenAITools, streamChat, upstreamError, transportError, type Gateway } from "./openai.ts";
+import { streamResponses } from "./responses.ts";
 
 function gateway(params: AdapterChatRequest): Gateway {
   return {
@@ -55,20 +56,48 @@ async function chat(params: AdapterChatRequest, ctx: Call): Promise<void> {
 }
 
 export const definition: Definition = {
-  provides: ["model.adapter.openai"],
+  provides: ["model.adapter.openai", "model.adapter.responses"],
   hostCalls: [],
-  registrations: [{ service: "model", capability: "model.adapter.openai" }],
+  registrations: [
+    { service: "model", capability: "model.adapter.openai" },
+    { service: "model", capability: "model.adapter.responses" },
+  ],
   injects: [],
   configKeys: [],
   methods: {
-    describe() {
-      return { id: "openai", name: "OpenAI Chat Completions", endpoint_hint: "https://api.example.com/v1" };
+    describe(_params, ctx) {
+      return ctx.capability === "model.adapter.responses"
+        ? { id: "responses", name: "Responses", endpoint_hint: "https://api.openai.com/v1" }
+        : { id: "openai", name: "Chat Completions", endpoint_hint: "https://api.example.com/v1" };
     },
     async discover(params) {
       return await discover(params ?? {});
     },
     async chat(params, ctx) {
-      await chat(params as AdapterChatRequest, ctx);
+      const request = params as AdapterChatRequest;
+      if (ctx.capability === "model.adapter.responses") {
+        if (ctx.stream === undefined) throw new CallError(-32602, "model adapter chat is streaming");
+        const reply = await streamResponses(
+          gateway(request),
+          {
+            model: request.model.model,
+            reasoning: request.route.reasoning,
+            messages: request.messages,
+            tools: request.tools,
+            temperature: request.temperature,
+            max_tokens: request.max_tokens,
+            session: request.session,
+          },
+          ctx.signal,
+          (event) => {
+            if (event.text !== undefined && event.text !== "") ctx.stream?.push({ type: "delta", text: event.text });
+            if (event.reasoning !== undefined && event.reasoning !== "") ctx.stream?.push({ type: "reasoning", text: event.reasoning });
+          },
+        );
+        ctx.stream.push({ type: "message", message: reply.message, ...(reply.usage === undefined ? {} : { usage: reply.usage }) });
+        return;
+      }
+      await chat(request, ctx);
     },
   },
   selfCheck() {

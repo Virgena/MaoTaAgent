@@ -290,7 +290,7 @@ export const definition: Definition = {
   configKeys: [],
   methods: {
     describe() {
-      return { id: "anthropic", name: "Anthropic Messages", endpoint_hint: "https://api.anthropic.com" };
+      return { id: "anthropic", name: "Messages", endpoint_hint: "https://api.anthropic.com" };
     },
     async discover(params) {
       return await discover(params ?? {});

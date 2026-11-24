@@ -139,7 +139,10 @@ export function SettingsView({
       group: t("personal"),
       label: t("models"),
       rows: [],
-      nav: [{ id: "models", label: t("modelSettings") }],
+      nav: [
+        { id: "providers", label: t("providers") },
+        { id: "models", label: t("model") },
+      ],
     },
     {
       id: "about",
@@ -381,11 +384,14 @@ export function SettingsView({
             <div className="settings-content">
               <section key={shown.id} className="settings-section" id={`settings-section-${shown.id}`}>
                 {shown.id === "models" ? (
-                  <div id="settings-models-models">
+                  <div id={`settings-models-${target ?? "models"}`}>
                     <ModelsSettings
+                      key={target === "providers" ? "providers" : "models"}
                       catalog={info?.models ?? null}
+                      view={target === "providers" ? "providers" : "models"}
                       onChanged={onModels}
                       onEditingChange={setModelEditing}
+                      onOpenProviders={() => go("models", "providers")}
                     />
                   </div>
                 ) : (
